@@ -10,7 +10,7 @@ A responsive portfolio builder for creating, editing, previewing, generating, an
 - **Cloud database:** Supabase Postgres, Supabase Auth, and Supabase Storage
 - **Hosting:** Vercel
 - **Published website URL:** [https://folio-foundry-alpha.vercel.app](https://folio-foundry-alpha.vercel.app)
-- **Portfolio designs:** Exactly three selectable templates — **Simple** (clean and professional), **Modern** (blue-accented project cards and structured sections), and **Creative** (warm colors, asymmetrical portrait, and offset project cards).
+- **Portfolio designs:** Exactly three selectable templates — **Simple** (clean and professional with green accents), **Modern** (blue-accented project cards and structured sections), and **Creative** (purple accents, asymmetrical portrait, and offset project cards).
 - **Database structure:** `public.folio_foundry_portfolios` stores the owner UUID, unique URL slug, full name, selected template, remaining portfolio information as JSONB, public profile photo URL, publish status, and creation/update timestamps. Row-level security lets a visitor read published portfolios and restricts editing/deletion to the portfolio owner. Profile images use the `folio-foundry-photos` Storage bucket.
 
 ### Screenshots
