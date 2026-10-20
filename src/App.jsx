@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import {
   ArrowDown, ArrowRight, ArrowUpRight, BriefcaseBusiness, Check, ChevronDown,
   CircleHelp, Code2, Eye, FileText, Globe2, GraduationCap, ImagePlus, Layers2, Link2,
-  LoaderCircle, Menu, Palette, Plus, Sparkles, Trash2, UserRound, X,
+  LoaderCircle, LogOut, Menu, Palette, Plus, Sparkles, Trash2, UserRound, X,
 } from 'lucide-react'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -35,9 +35,9 @@ const cleanSlug = (value) => value.toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
 const safeHref = (value) => /^https?:\/\//i.test(value || '') ? value : '#'
 
-function usePortfolioStore() {
+function usePortfolioStore(user) {
   const [ready, setReady] = useState(false)
-  const [userId, setUserId] = useState(null)
+  const userId = user.id
   const [portfolioId, setPortfolioId] = useState(null)
   const [portfolio, setPortfolio] = useState(emptyPortfolio)
   const [template, setTemplate] = useState('simple')
@@ -50,35 +50,9 @@ function usePortfolioStore() {
   useEffect(() => {
     let active = true
     async function load() {
-      if (!supabase) {
-        try {
-          const saved = JSON.parse(localStorage.getItem('folio-foundry') || 'null')
-          if (active && saved) {
-            setPortfolio({ ...emptyPortfolio, ...saved.content })
-            setTemplate(saved.template || 'simple')
-            setSlug(saved.slug || '')
-            setPublished(Boolean(saved.published))
-            setHasSaved(true)
-          }
-        } catch {
-          if (active) setError('Could not read the saved draft in this browser.')
-        }
-        if (active) setReady(true)
-        return
-      }
       try {
-        let { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) throw sessionError
-        if (!session) {
-          const result = await supabase.auth.signInAnonymously()
-          if (result.error) throw result.error
-          session = result.data.session
-        }
-        if (!session?.user) throw new Error('Could not start a secure editing session.')
-        if (!active) return
-        setUserId(session.user.id)
         const { data, error: loadError } = await supabase
-          .from(portfolioTable).select('*').eq('owner_id', session.user.id).order('created_at').limit(1).maybeSingle()
+          .from(portfolioTable).select('*').eq('owner_id', userId).order('created_at').limit(1).maybeSingle()
         if (loadError) throw loadError
         if (data) {
           setPortfolioId(data.id)
@@ -96,7 +70,7 @@ function usePortfolioStore() {
     }
     load()
     return () => { active = false }
-  }, [])
+  }, [userId])
 
   const updatePortfolio = (field, value) => {
     setPortfolio((current) => ({ ...current, [field]: value }))
@@ -128,23 +102,11 @@ function usePortfolioStore() {
       }
       image.src = objectUrl
     })
-    if (supabase) {
-      if (!userId) throw new Error('Your secure editing session is not ready. Please try again.')
-      const extension = 'jpg'
-      const path = `${userId}/${crypto.randomUUID()}.${extension}`
-      const { error: uploadError } = await supabase.storage.from(photoBucket).upload(path, optimizedFile, { upsert: true, contentType: 'image/jpeg' })
-      if (uploadError) throw uploadError
-      const { data } = supabase.storage.from(photoBucket).getPublicUrl(path)
-      updatePortfolio('image', data.publicUrl)
-    } else {
-      const image = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = () => reject(new Error('Could not read the selected image.'))
-        reader.readAsDataURL(optimizedFile)
-      })
-      updatePortfolio('image', image)
-    }
+    const path = `${userId}/${crypto.randomUUID()}.jpg`
+    const { error: uploadError } = await supabase.storage.from(photoBucket).upload(path, optimizedFile, { upsert: true, contentType: 'image/jpeg' })
+    if (uploadError) throw uploadError
+    const { data } = supabase.storage.from(photoBucket).getPublicUrl(path)
+    updatePortfolio('image', data.publicUrl)
   }
 
   async function save({ publish = false } = {}) {
@@ -153,15 +115,6 @@ function usePortfolioStore() {
     if (publish && !portfolio.fullName.trim()) throw new Error('Add your full name before publishing.')
     if (!nextSlug) throw new Error('Add a name to create a portfolio link.')
     const nextPublished = publish
-    if (!supabase) {
-      localStorage.setItem('folio-foundry', JSON.stringify({ content: portfolio, template, slug: nextSlug, published: nextPublished }))
-      setSlug(nextSlug)
-      setPublished(nextPublished)
-      setDirty(false)
-      setHasSaved(true)
-      return { local: true }
-    }
-    if (!userId) throw new Error('Your secure editing session is not ready. Please try again.')
     const values = {
       owner_id: userId, slug: nextSlug, full_name: portfolio.fullName.trim(),
       template, content: portfolio, profile_image: portfolio.image || null,
@@ -177,26 +130,21 @@ function usePortfolioStore() {
     setPublished(nextPublished)
     setDirty(false)
     setHasSaved(true)
-    return { local: false }
   }
 
   async function remove() {
     setError('')
     let photoCleanupError = ''
-    if (supabase) {
-      if (!userId || !portfolioId) throw new Error('Could not find a saved portfolio to delete.')
-      const { data: deleted, error: deleteError } = await supabase.from(portfolioTable)
-        .delete().eq('id', portfolioId).eq('owner_id', userId).select('id').maybeSingle()
-      if (deleteError) throw deleteError
-      if (!deleted) throw new Error('No portfolio was deleted. Refresh the page and try again.')
-      const photoPrefix = `${supabaseUrl}/storage/v1/object/public/${photoBucket}/`
-      const photoPath = portfolio.image?.startsWith(photoPrefix) ? portfolio.image.slice(photoPrefix.length) : ''
-      if (photoPath) {
-        const { error: storageError } = await supabase.storage.from(photoBucket).remove([decodeURIComponent(photoPath)])
-        if (storageError) photoCleanupError = storageError.message
-      }
-    } else {
-      localStorage.removeItem('folio-foundry')
+    if (!portfolioId) throw new Error('Could not find a saved portfolio to delete.')
+    const { data: deleted, error: deleteError } = await supabase.from(portfolioTable)
+      .delete().eq('id', portfolioId).eq('owner_id', userId).select('id').maybeSingle()
+    if (deleteError) throw deleteError
+    if (!deleted) throw new Error('No portfolio was deleted. Refresh the page and try again.')
+    const photoPrefix = `${supabaseUrl}/storage/v1/object/public/${photoBucket}/`
+    const photoPath = portfolio.image?.startsWith(photoPrefix) ? portfolio.image.slice(photoPrefix.length) : ''
+    if (photoPath) {
+      const { error: storageError } = await supabase.storage.from(photoBucket).remove([decodeURIComponent(photoPath)])
+      if (storageError) photoCleanupError = storageError.message
     }
     setPortfolioId(null)
     setPortfolio(emptyPortfolio)
@@ -205,7 +153,7 @@ function usePortfolioStore() {
     setPublished(false)
     setDirty(false)
     setHasSaved(false)
-    return { local: !supabase, photoCleanupError }
+    return { photoCleanupError }
   }
 
   const chooseTemplate = (value) => {
@@ -280,7 +228,91 @@ function PublicPortfolio({ slug }) {
 }
 
 function App() {
-  const store = usePortfolioStore()
+  const [user, setUser] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
+  const [authError, setAuthError] = useState('')
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true)
+      return undefined
+    }
+    let active = true
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
+      setUser(session?.user?.is_anonymous ? null : session?.user || null)
+      setAuthError('')
+      setAuthReady(true)
+    })
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!active) return
+      if (error) setAuthError(`Could not check your sign-in status: ${error.message}`)
+      else setUser(session?.user?.is_anonymous ? null : session?.user || null)
+      setAuthReady(true)
+    }).catch((error) => {
+      if (!active) return
+      setAuthError(`Could not check your sign-in status: ${error.message}`)
+      setAuthReady(true)
+    })
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authReady) return
+    if (user && window.location.pathname === '/login') window.history.replaceState(null, '', '/')
+    else if (!user && window.location.pathname !== '/login') window.history.replaceState(null, '', '/login')
+  }, [authReady, user])
+
+  if (!authReady) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>CHECKING YOUR SIGN-IN</span></div>
+  if (!user) return <LoginPage authError={authError} />
+  return <PortfolioApp user={user} />
+}
+
+function LoginPage({ authError }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (!supabase) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (signInError) throw signInError
+      window.location.replace('/')
+    } catch (signInError) {
+      setError(`Sign in failed: ${signInError.message}`)
+      setSubmitting(false)
+    }
+  }
+
+  return <main className="login-page">
+    <section className="login-card" aria-labelledby="login-title">
+      <a className="sidebar-logo login-logo" href="/" aria-label="Folio Foundry"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span><small>YOUR PORTFOLIO, MADE PERSONAL</small></span></a>
+      <span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span>
+      <h1 id="login-title">Welcome <em>back.</em></h1>
+      <p className="login-intro">Sign in to continue to your portfolio workspace.</p>
+      {!supabase && <div className="login-message" role="alert">Supabase is not configured. Add your project URL and anon key to the environment before signing in.</div>}
+      {(error || authError) && <div className="login-message" role="alert">{error || authError}</div>}
+      <form className="login-form" onSubmit={handleSubmit}>
+        <label className="field">Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required disabled={!supabase || submitting} /></label>
+        <label className="field">Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required disabled={!supabase || submitting} /></label>
+        <button className="button button-dark login-submit" type="submit" disabled={!supabase || submitting}>{submitting ? <><LoaderCircle size={16} className="spin" /> Signing in…</> : <>Sign in <ArrowRight size={15} /></>}</button>
+      </form>
+      <div className="login-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div>
+    </section>
+    <aside className="login-art" aria-hidden="true"><span className="login-art-orbit" /><span className="login-art-mark">f.</span><span className="login-art-note">A LITTLE<br />MORE YOU ↗</span><div><span className="eyebrow">A SPACE TO TELL YOUR STORY</span><p>Your work,<br />beautifully <em>told.</em></p></div></aside>
+  </main>
+}
+
+function PortfolioApp({ user }) {
+  const store = usePortfolioStore(user)
   const { portfolio, updatePortfolio } = store
   const [activeTab, setActiveTab] = useState('about')
   const [preview, setPreview] = useState(false)
@@ -324,9 +356,9 @@ function App() {
     setNotice('')
     store.setError('')
     try {
-      const result = await store.save({ publish })
-      if (publish) setNotice(result.local ? 'Saved on this device. Connect Supabase to publish a public link.' : 'Your portfolio is live. Copy the link and share it with the world.')
-      else setNotice(result.local ? 'Draft saved on this device.' : 'All your changes are saved.')
+      await store.save({ publish })
+      if (publish) setNotice('Your portfolio is live. Copy the link and share it with the world.')
+      else setNotice('All your changes are saved.')
     } catch (error) {
       store.setError(error.message)
     } finally {
@@ -384,6 +416,16 @@ function App() {
     setSkillInput('')
   }
 
+  async function handleSignOut() {
+    try {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+      window.location.replace('/login')
+    } catch (signOutError) {
+      store.setError(`Could not sign out: ${signOutError.message}`)
+    }
+  }
+
   if (!store.ready) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>MAKING ROOM FOR YOUR STORY</span></div>
 
   return <div className="app-shell">
@@ -393,17 +435,15 @@ function App() {
       <div className="workspace-card"><div className="workspace-avatar">{portfolio.fullName?.trim()?.[0]?.toUpperCase() || <UserRound size={17} />}</div><div><strong>{portfolio.fullName || 'Your portfolio'}</strong><span>{store.published ? 'Published website' : 'Personal workspace'}</span></div><span className="workspace-status" title={store.published ? 'Published' : 'Draft'} /></div>
       <div className="sidebar-heading">YOUR PORTFOLIO</div>
       <nav className="sidebar-nav" aria-label="Portfolio sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
+      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={15} /> Sign out</button><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
     </aside>
     {mobileMenu && <button className="mobile-scrim" onClick={() => setMobileMenu(false)} aria-label="Close navigation" />}
 
     <main className="builder-main">
-      <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Open navigation"><Menu /></button><span className="breadcrumb">My workspace <span>/</span> <strong>Portfolio builder</strong></span></div><div className="topbar-actions"><span className={`save-status ${saving ? '' : store.dirty ? 'is-dirty' : 'is-saved'}`}>{saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}{saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}</span><button className="button button-outline button-preview" title="Preview portfolio" aria-label="Preview portfolio" onClick={() => setPreview(true)}><Eye size={16} /> Preview</button><button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving}><Check size={15} /> Save draft</button><button className="button button-dark button-publish" title="Publish portfolio" aria-label="Publish portfolio" onClick={() => handleSave(true)} disabled={saving || !supabase}><Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} /></button></div></header>
+      <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Open navigation"><Menu /></button><span className="breadcrumb">My workspace <span>/</span> <strong>Portfolio builder</strong></span></div><div className="topbar-actions"><span className={`save-status ${saving ? '' : store.dirty ? 'is-dirty' : 'is-saved'}`}>{saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}{saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}</span><button className="button button-outline button-preview" title="Preview portfolio" aria-label="Preview portfolio" onClick={() => setPreview(true)}><Eye size={16} /> Preview</button><button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving}><Check size={15} /> Save draft</button><button className="button button-dark button-publish" title="Publish portfolio" aria-label="Publish portfolio" onClick={() => handleSave(true)} disabled={saving}><Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} /></button><button className="button button-outline button-signout" title="Sign out" aria-label="Sign out" onClick={handleSignOut}><LogOut size={15} /><span>Sign out</span></button></div></header>
       <div className="builder-content">
         <section className="welcome-block" id="home"><div className="welcome-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span><h1>A portfolio that feels<br />like <em>you.</em></h1><p>Bring your story, your work, and your next big opportunity into focus.</p><button className="button button-dark welcome-cta" onClick={() => goToSection('about')}>{store.hasSaved ? 'Edit your portfolio' : 'Create portfolio'} <ArrowRight size={15} /></button></div><div className="welcome-art" aria-hidden="true"><span className="art-orbit orbit-one" /><span className="art-orbit orbit-two" /><span className="art-sparkle"><Sparkles size={20} /></span><span className="art-note">A LITTLE<br />MORE YOU ↗</span><span className="art-mark">f.</span><span className="art-dot dot-one" /><span className="art-dot dot-two" /></div></section>
         {(store.error || notice) && <div className={`notice ${store.error ? 'notice-error' : 'notice-success'}`} role="status">{store.error ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || notice}{notice.includes('Your portfolio is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your portfolio link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
-        {!supabase && <div className="setup-banner"><span><Sparkles size={16} /> You’re in local preview mode — connect Supabase to save online and publish a shareable link.</span><a href="#setup">How to connect <ArrowRight size={14} /></a></div>}
-
         <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="A little about you" subtitle="Start with the basics. Every good introduction starts somewhere."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Email address<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Address <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile picture</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Portfolio profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Drop in a photo of you</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">About me <span className="field-note">A few sentences in your own words</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="What do you care about? What kind of work gets you out of bed in the morning? Here’s your space to tell that story." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
 
         <section className="editor-section" id="education"><SectionHead number="02" icon={GraduationCap} title="The things you’ve learned" subtitle="School, a course, a long afternoon on YouTube — it all counts."/><RowEditor type="education" items={portfolio.education} onChange={(rows) => setRows('education', rows)} /><button className="add-entry" onClick={() => addRow('education')}><Plus size={16} /> Add education</button></section>
