@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
-  ArrowDown, ArrowRight, ArrowUpRight, BriefcaseBusiness, Check, ChevronDown,
+  ArrowDown, ArrowRight, ArrowUpRight, BriefcaseBusiness, Check,
   CircleHelp, Code2, Eye, FileText, Globe2, GraduationCap, ImagePlus, Layers2, Link2,
-  LoaderCircle, Menu, Palette, Plus, Sparkles, Trash2, UserRound, X,
+  EyeOff, LoaderCircle, LockKeyhole, LogOut, Mail, Menu, Palette, Plus, Sparkles, Trash2, UserRound, X,
 } from 'lucide-react'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -11,6 +11,8 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
 const portfolioTable = 'folio_foundry_portfolios'
 const photoBucket = 'folio-foundry-photos'
+const localAccountsKey = 'folio-foundry-accounts'
+const localSessionKey = 'folio-foundry-session'
 const templates = [
   { id: 'simple', name: 'Simple', style: 'Professional', description: 'A clear, classic layout with calm colors and easy-to-read sections.', accent: 'SAGE' },
   { id: 'modern', name: 'Modern', style: 'Card-based', description: 'A bold, structured layout with visual project cards and crisp details.', accent: 'BLUE' },
@@ -30,12 +32,22 @@ const defaultRows = {
 }
 const templateClasses = { simple: 'theme-simple', modern: 'theme-modern', creative: 'theme-creative' }
 
+async function hashLocalPassword(password, saltHex = '') {
+  const salt = saltHex
+    ? Uint8Array.from(saltHex.match(/.{2}/g), (byte) => Number.parseInt(byte, 16))
+    : crypto.getRandomValues(new Uint8Array(16))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256)
+  const hash = Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return { salt: Array.from(salt, (byte) => byte.toString(16).padStart(2, '0')).join(''), hash }
+}
+
 const cleanSlug = (value) => value.toLowerCase().trim()
   .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
 const safeHref = (value) => /^https?:\/\//i.test(value || '') ? value : '#'
 
-function usePortfolioStore() {
+function usePortfolioStore(enabled = true) {
   const [ready, setReady] = useState(false)
   const [userId, setUserId] = useState(null)
   const [portfolioId, setPortfolioId] = useState(null)
@@ -50,6 +62,10 @@ function usePortfolioStore() {
   useEffect(() => {
     let active = true
     async function load() {
+      if (!enabled) {
+        if (active) setReady(true)
+        return
+      }
       if (!supabase) {
         try {
           const saved = JSON.parse(localStorage.getItem('folio-foundry') || 'null')
@@ -67,14 +83,12 @@ function usePortfolioStore() {
         return
       }
       try {
-        let { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
-        if (!session) {
-          const result = await supabase.auth.signInAnonymously()
-          if (result.error) throw result.error
-          session = result.data.session
+        if (!session?.user) {
+          if (active) setReady(true)
+          return
         }
-        if (!session?.user) throw new Error('Could not start a secure editing session.')
         if (!active) return
         setUserId(session.user.id)
         const { data, error: loadError } = await supabase
@@ -87,6 +101,10 @@ function usePortfolioStore() {
           setSlug(data.slug)
           setPublished(data.is_published)
           setHasSaved(true)
+        } else if (session.user.user_metadata?.portfolio_draft) {
+          setPortfolio({ ...emptyPortfolio, ...session.user.user_metadata.portfolio_draft })
+        } else if (session.user.user_metadata?.full_name) {
+          setPortfolio((current) => ({ ...current, fullName: session.user.user_metadata.full_name }))
         }
       } catch (loadError) {
         if (active) setError(`Database connection failed: ${loadError.message}`)
@@ -96,7 +114,7 @@ function usePortfolioStore() {
     }
     load()
     return () => { active = false }
-  }, [])
+  }, [enabled])
 
   const updatePortfolio = (field, value) => {
     setPortfolio((current) => ({ ...current, [field]: value }))
@@ -237,10 +255,10 @@ function RowEditor({ type, items, onChange }) {
   ))}</div>
 }
 
-function PortfolioPage({ portfolio, template, isPublic = false, onClose }) {
+function PortfolioPage({ portfolio, template, isPublic = false, onClose, onLogout }) {
   const theme = template || 'simple'
   return <div className={`portfolio-page ${templateClasses[theme] || templateClasses.simple}`}>
-    {isPublic && <div className="public-ribbon"><span><Sparkles size={14} /> Made with Folio Foundry</span><a href="/" className="made-link">Make your own <ArrowUpRight size={14} /></a></div>}
+    {isPublic && <div className="public-ribbon"><span><Sparkles size={14} /> Made with Folio Foundry</span><div className="public-ribbon-actions"><a href="/builder" className="made-link">Make your own <ArrowUpRight size={14} /></a><button type="button" className="public-logout" onClick={onLogout}><LogOut size={13} /> Log out</button></div></div>}
     <header className="portfolio-nav"><a href="#top" className="portfolio-brand"><span className="brand-mark">f.</span> {portfolio.fullName || 'Your name'}</a><nav>{portfolio.links?.filter((link) => safeHref(link.url) !== '#').slice(0, 3).map((link, index) => <a key={index} href={safeHref(link.url)} target="_blank" rel="noreferrer">{link.label || 'Connect'}</a>)}<a href="#contact">Say hello <ArrowUpRight size={14} /></a></nav>{onClose && <button className="preview-close" onClick={onClose} aria-label="Close preview"><X size={18} /></button>}</header>
     <main id="top">
       <section className="portfolio-hero">
@@ -260,12 +278,15 @@ function PortfolioPage({ portfolio, template, isPublic = false, onClose }) {
   </div>
 }
 
-function PublicPortfolio({ slug }) {
+function PublicPortfolio({ slug, onLogout }) {
   const [record, setRecord] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    if (!supabase) { setError('Online portfolios need a Supabase connection.'); return () => { active = false } }
+    if (!supabase) {
+      setError('Online portfolios need a Supabase connection.')
+      return () => { active = false }
+    }
     supabase.from(portfolioTable).select('template,content,full_name,profile_image').eq('slug', slug).eq('is_published', true).maybeSingle()
       .then(({ data, error: requestError }) => {
         if (!active) return
@@ -275,12 +296,179 @@ function PublicPortfolio({ slug }) {
       })
     return () => { active = false }
   }, [slug])
-  if (record) return <PortfolioPage portfolio={record} template={record.template || 'simple'} isPublic />
+  if (record) return <PortfolioPage portfolio={record} template={record.template || 'simple'} isPublic onLogout={onLogout} />
   return <div className="public-state"><div className="brand-mark">f.</div>{error ? <><h1>Portfolio not found.</h1><p>{error}</p></> : <><LoaderCircle className="spin" /><p>Opening this portfolio…</p></>}</div>
 }
 
+function HomePage() {
+  return <main className="home-page">
+    <header className="home-nav">
+      <a className="home-brand" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
+    </header>
+    <section className="home-hero">
+      <div className="home-hero-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span><h1>Make your work<br />impossible to <em>miss.</em></h1><p>Build a personal portfolio from the work, experience, and ideas you already have. Make it yours, then share it with the world.</p><div className="home-actions"><a className="button button-dark" href="/login">Log in <ArrowRight size={15} /></a></div><div className="home-proof"><span><Check size={14} /> Three distinct designs</span></div></div>
+      <div className="home-brand-showcase" aria-label="Folio Foundry brand mark"><span className="home-brand-orbit home-brand-orbit-outer" /><span className="home-brand-orbit home-brand-orbit-inner" /><span className="brand-mark home-showcase-mark">f.</span><span className="home-showcase-name">foliofoundry</span><span className="home-showcase-caption">YOUR STORY, TAKING SHAPE</span></div>
+    </section>
+    <section className="home-designs" id="designs"><div className="home-section-heading"><div><span className="eyebrow">A STARTING POINT, NOT A BOX</span><h2>Find a look that feels like you.</h2></div></div><div className="home-template-grid">{templates.map((template) => <article className="home-template" key={template.id}><div><span>{template.style}</span><h3>{template.name}</h3><p>{template.description}</p></div></article>)}</div></section>
+    <footer className="home-footer"><a className="home-brand" href="/"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a><span>MADE FOR YOUR NEXT CHAPTER</span></footer>
+  </main>
+}
+
+function WorkspaceHome({ displayName, onLogout, loggingOut }) {
+  return <main className="workspace-home">
+    <header className="workspace-home-header">
+      <a className="home-brand" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
+      <button className="button button-outline" onClick={onLogout} disabled={loggingOut}>{loggingOut ? <LoaderCircle size={15} className="spin" /> : <LogOut size={15} />}<span>{loggingOut ? 'Signing out…' : 'Log out'}</span></button>
+    </header>
+    <section className="workspace-home-main">
+      <span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span>
+      <h1>Welcome back{displayName ? `, ${displayName}` : ''}.</h1>
+      <p>Your work, experience, and ideas belong in one place. Pick up where you left off.</p>
+      <a className="button button-dark workspace-home-edit" href="/builder">Edit your portfolio <ArrowRight size={15} /></a>
+      <div className="workspace-home-footer"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div>
+    </section>
+  </main>
+}
+
+function LoginPage() {
+  const [mode, setMode] = useState(() => {
+    const requestedMode = new URLSearchParams(window.location.search).get('mode')
+    return requestedMode === 'signup' || requestedMode === 'recovery' ? requestedMode : 'signin'
+  })
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [feedback, setFeedback] = useState({ type: '', message: '' })
+  const loginFormRef = useRef(null)
+
+  useEffect(() => {
+    const clearLoginForm = () => loginFormRef.current?.reset()
+    window.addEventListener('pagehide', clearLoginForm)
+    return () => window.removeEventListener('pagehide', clearLoginForm)
+  }, [])
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setFeedback({ type: '', message: '' })
+    try {
+      const form = new FormData(event.currentTarget)
+      const email = String(form.get('email') || '').trim()
+      const password = String(form.get('password') || '')
+      const fullName = String(form.get('fullName') || '').trim()
+      if (mode === 'recovery') {
+        if (!supabase) throw new Error('Password recovery requires a Supabase connection.')
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) throw error
+        window.location.replace('/dashboard')
+        return
+      }
+      if (supabase) {
+        const result = mode === 'signin'
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
+        if (result.error) throw result.error
+        if (mode === 'signup' && !result.data.session) {
+          setFeedback({ type: 'success', message: 'Check your email to confirm your account, then sign in.' })
+        } else {
+          window.location.assign('/dashboard')
+        }
+      } else {
+        const accounts = JSON.parse(localStorage.getItem(localAccountsKey) || '[]')
+        const account = accounts.find((item) => item.email === email.toLowerCase())
+        if (mode === 'signup') {
+          if (account) throw new Error('An account with this email already exists. Sign in instead.')
+          const credentials = await hashLocalPassword(password)
+          const newAccount = { email: email.toLowerCase(), fullName, ...credentials }
+          localStorage.setItem(localAccountsKey, JSON.stringify([...accounts, newAccount]))
+          localStorage.setItem(localSessionKey, JSON.stringify({ email: newAccount.email, fullName }))
+        } else {
+          if (!account) throw new Error('No account found for this email. Create an account first.')
+          const credentials = await hashLocalPassword(password, account.salt)
+          if (credentials.hash !== account.hash) throw new Error('Incorrect email or password.')
+          localStorage.setItem(localSessionKey, JSON.stringify({ email: account.email, fullName: account.fullName }))
+        }
+        window.location.assign('/dashboard')
+      }
+    } catch (error) {
+      const message = error.message === 'Invalid login credentials'
+        ? 'Invalid email or password. Check your details or request a password reset.'
+        : error.message || 'Something went wrong. Please try again.'
+      setFeedback({ type: 'error', message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function requestPasswordReset() {
+    const emailField = loginFormRef.current?.querySelector('[name="email"]')
+    const email = String(emailField?.value || '').trim()
+    if (!email) {
+      setFeedback({ type: 'error', message: 'Enter your email address first, then request a reset link.' })
+      emailField?.focus()
+      return
+    }
+    if (!supabase) {
+      setFeedback({ type: 'error', message: 'Password reset requires a connected Supabase project.' })
+      return
+    }
+    setBusy(true)
+    setFeedback({ type: '', message: '' })
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login?mode=recovery`,
+      })
+      if (error) throw error
+      setFeedback({ type: 'success', message: 'If an account matches this address, a password reset link is on its way.' })
+    } catch (error) {
+      setFeedback({ type: 'error', message: error.message || 'Could not send a password reset email.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="login-page">
+    <section className="login-story" aria-label="Folio Foundry">
+      <a className="sidebar-logo login-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
+      <div className="login-story-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER</span><h1>Make room<br />for <em>your story.</em></h1><p>Gather your work, your ideas, and everything that makes your next step yours.</p></div>
+      <div className="login-story-art" aria-hidden="true"><span className="login-orbit login-orbit-one" /><span className="login-orbit login-orbit-two" /><span className="login-art-mark">f.</span><span className="login-art-note">MADE<br />BY YOU</span><Sparkles className="login-art-sparkle" size={18} /></div>
+      <span className="login-story-caption">A PORTFOLIO BUILDER FOR WHAT’S NEXT</span>
+    </section>
+    <section className="login-panel">
+      <div className="login-form-wrap">
+        <span className="login-kicker">YOUR WORKSPACE</span>
+        <h2>{mode === 'signin' ? 'Welcome back.' : mode === 'recovery' ? 'Reset your password.' : 'Start your story.'}</h2>
+        <p className="login-subtitle">{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Create an account to save and manage your portfolio.'}</p>
+        {!supabase && <div className="login-config-note" role="status">Accounts are saved only in this browser for now. They won’t sync across devices.</div>}
+        {feedback.message && <div className={`login-feedback login-feedback-${feedback.type}`} role="status">{feedback.message}</div>}
+        <form ref={loginFormRef} className="login-form" onSubmit={submit}>
+          {mode === 'signup' && <label className="login-field">Full name<span className="login-input-wrap"><UserRound size={16} /><input name="fullName" type="text" autoComplete="name" placeholder="The name on your portfolio" maxLength={120} required /></span></label>}
+          {mode !== 'recovery' && <label className="login-field">Email address<span className="login-input-wrap"><Mail size={16} /><input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></span></label>}
+          <label className="login-field">{mode === 'recovery' ? 'New password' : 'Password'}<span className="login-input-wrap"><LockKeyhole size={16} /><input name="password" type={passwordVisible ? 'text' : 'password'} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} placeholder="At least 8 characters" minLength={8} required /><button className="login-password-toggle" type="button" aria-label={passwordVisible ? 'Hide password' : 'Show password'} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <Eye size={16} /> : <EyeOff size={16} />}</button></span></label>
+          {mode === 'signin' && <button className="login-forgot" type="button" onClick={requestPasswordReset} disabled={busy}>Forgot password?</button>}
+          <button className="button button-dark login-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : null}{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'recovery' ? 'Save new password' : 'Create account'}<ArrowRight size={16} /></button>
+        </form>
+        {mode === 'recovery' ? <p className="login-switch">Back to <button type="button" onClick={() => { setMode('signin'); setFeedback({ type: '', message: '' }) }}>sign in</button></p> : <p className="login-switch">{mode === 'signin' ? 'New to Folio Foundry?' : 'Already have an account?'} <button type="button" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setFeedback({ type: '', message: '' }) }}>{mode === 'signin' ? 'Create an account' : 'Sign in'}</button></p>}
+      </div>
+      <footer className="login-footer"><span>MADE FOR YOUR NEXT CHAPTER</span><span>FOLIO FOUNDRY · 2026</span></footer>
+    </section>
+  </main>
+}
+
 function App() {
-  const store = usePortfolioStore()
+  const currentPath = window.location.pathname.replace(/\/+$/, '') || '/'
+  const loginPath = currentPath === '/login'
+  const dashboardPath = currentPath === '/dashboard'
+  const builderPath = currentPath === '/builder'
+  const path = window.location.pathname.match(/^\/p\/([^/]+)\/?$/)
+  const protectedRoute = dashboardPath || builderPath || Boolean(path)
+  const [authReady, setAuthReady] = useState(!supabase)
+  const [authSession, setAuthSession] = useState(() => {
+    if (supabase) return null
+    try { return JSON.parse(localStorage.getItem(localSessionKey) || 'null') } catch { return null }
+  })
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
+  const store = usePortfolioStore(builderPath)
   const { portfolio, updatePortfolio } = store
   const [activeTab, setActiveTab] = useState('about')
   const [preview, setPreview] = useState(false)
@@ -290,7 +478,30 @@ function App() {
   const [mobileMenu, setMobileMenu] = useState(false)
   const [skillInput, setSkillInput] = useState('')
   const imageRef = useRef(null)
-  const path = window.location.pathname.match(/^\/p\/([^/]+)\/?$/)
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true)
+      return
+    }
+    let active = true
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
+      setAuthSession(session)
+      setAuthReady(true)
+    })
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return
+      setAuthSession(error ? null : data.session)
+      setAuthReady(true)
+    })
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [])
+  useEffect(() => {
+    if (authReady && (supabase ? protectedRoute : dashboardPath || builderPath) && !authSession) window.location.replace('/login')
+  }, [authReady, authSession, protectedRoute, dashboardPath, builderPath])
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
@@ -303,17 +514,40 @@ function App() {
     const checks = [portfolio.fullName, portfolio.email, portfolio.about, portfolio.image, portfolio.education.length, portfolio.skills.length, portfolio.projects.length, portfolio.experience.length]
     return Math.round(checks.filter(Boolean).length / checks.length * 100)
   }, [portfolio])
-  if (path) return <PublicPortfolio slug={decodeURIComponent(path[1])} />
+  async function handleLogout() {
+    setLogoutError('')
+    setLoggingOut(true)
+    try {
+      if (!supabase) {
+        localStorage.removeItem(localSessionKey)
+        window.location.replace('/login')
+        return
+      }
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      window.location.replace('/login')
+    } catch (error) {
+      setLogoutError(`Could not sign out: ${error.message}`)
+      setLoggingOut(false)
+    }
+  }
+
+  if ((dashboardPath || builderPath) && (!authReady || !authSession)) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>{authReady ? 'REDIRECTING TO SIGN IN' : 'CHECKING YOUR ACCOUNT'}</span></div>
+  if (supabase && path && !authReady) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>CHECKING YOUR ACCOUNT</span></div>
+  if (supabase && protectedRoute && !authSession) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>REDIRECTING TO SIGN IN</span></div>
+  if (path) return <PublicPortfolio slug={decodeURIComponent(path[1])} onLogout={handleLogout} />
+  if (loginPath) return <LoginPage />
+  if (dashboardPath) return <WorkspaceHome displayName={authSession?.fullName || authSession?.user?.user_metadata?.full_name || ''} onLogout={handleLogout} loggingOut={loggingOut} />
+  if (!builderPath) return <HomePage />
 
   const sections = [
-    { id: 'home', label: 'Home', icon: Sparkles },
-    { id: 'about', label: 'About me', icon: UserRound },
+    { id: 'about', label: 'Portfolio information', icon: UserRound },
     { id: 'education', label: 'Education', icon: GraduationCap },
     { id: 'skills', label: 'Skills', icon: Code2 },
     { id: 'projects', label: 'Projects', icon: Layers2 },
     { id: 'experience', label: 'Experience', icon: BriefcaseBusiness },
     { id: 'links', label: 'Links & socials', icon: Link2 },
-    { id: 'design', label: 'Choose a design', icon: Palette },
+    { id: 'design', label: 'Template selection', icon: Palette },
     { id: 'manage', label: 'Manage portfolio', icon: Globe2 },
   ]
   const addRow = (type) => updatePortfolio(type, [...portfolio[type], { ...defaultRows[type] }])
@@ -389,8 +623,6 @@ function App() {
   return <div className="app-shell">
     <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
       <a className="sidebar-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span><small>YOUR PORTFOLIO, MADE PERSONAL</small></span></a>
-      <div className="workspace-label">YOUR WORKSPACE <ChevronDown size={14} /></div>
-      <div className="workspace-card"><div className="workspace-avatar">{portfolio.fullName?.trim()?.[0]?.toUpperCase() || <UserRound size={17} />}</div><div><strong>{portfolio.fullName || 'Your portfolio'}</strong><span>{store.published ? 'Published website' : 'Personal workspace'}</span></div><span className="workspace-status" title={store.published ? 'Published' : 'Draft'} /></div>
       <div className="sidebar-heading">YOUR PORTFOLIO</div>
       <nav className="sidebar-nav" aria-label="Portfolio sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
       <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
@@ -398,10 +630,25 @@ function App() {
     {mobileMenu && <button className="mobile-scrim" onClick={() => setMobileMenu(false)} aria-label="Close navigation" />}
 
     <main className="builder-main">
-      <header className="topbar"><div className="topbar-left"><button className="mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Open navigation"><Menu /></button><span className="breadcrumb">My workspace <span>/</span> <strong>Portfolio builder</strong></span></div><div className="topbar-actions"><span className={`save-status ${saving ? '' : store.dirty ? 'is-dirty' : 'is-saved'}`}>{saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}{saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}</span><button className="button button-outline button-preview" title="Preview portfolio" aria-label="Preview portfolio" onClick={() => setPreview(true)}><Eye size={16} /> Preview</button><button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving}><Check size={15} /> Save draft</button><button className="button button-dark button-publish" title="Publish portfolio" aria-label="Publish portfolio" onClick={() => handleSave(true)} disabled={saving || !supabase}><Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} /></button></div></header>
+      <header className="topbar">
+        <div className="topbar-left">
+          <button className="mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Open navigation"><Menu /></button>
+          <span className="breadcrumb">My workspace <span>/</span> <strong>Portfolio builder</strong></span>
+        </div>
+        <div className="topbar-actions">
+          <span className={`save-status ${saving ? '' : store.dirty ? 'is-dirty' : 'is-saved'}`}>
+            {saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}
+            {saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}
+          </span>
+          <button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving}><Check size={15} /> Save draft</button>
+          <button className="button button-dark button-publish" title={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} aria-label={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} onClick={() => handleSave(true)} disabled={saving || !supabase}>
+            <Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} />
+          </button>
+          <button className="button button-outline button-logout" onClick={handleLogout} disabled={loggingOut} title="Log out">{loggingOut ? <LoaderCircle size={15} className="spin" /> : <LogOut size={15} />}<span>{loggingOut ? 'Signing out…' : 'Log out'}</span></button>
+        </div>
+      </header>
       <div className="builder-content">
-        <section className="welcome-block" id="home"><div className="welcome-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span><h1>A portfolio that feels<br />like <em>you.</em></h1><p>Bring your story, your work, and your next big opportunity into focus.</p><button className="button button-dark welcome-cta" onClick={() => goToSection('about')}>{store.hasSaved ? 'Edit your portfolio' : 'Create portfolio'} <ArrowRight size={15} /></button></div><div className="welcome-art" aria-hidden="true"><span className="art-orbit orbit-one" /><span className="art-orbit orbit-two" /><span className="art-sparkle"><Sparkles size={20} /></span><span className="art-note">A LITTLE<br />MORE YOU ↗</span><span className="art-mark">f.</span><span className="art-dot dot-one" /><span className="art-dot dot-two" /></div></section>
-        {(store.error || notice) && <div className={`notice ${store.error ? 'notice-error' : 'notice-success'}`} role="status">{store.error ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || notice}{notice.includes('Your portfolio is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your portfolio link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
+        {(store.error || notice || logoutError) && <div className={`notice ${store.error || logoutError ? 'notice-error' : 'notice-success'}`} role="status">{store.error || logoutError ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || logoutError || notice}{notice.includes('Your portfolio is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your portfolio link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice(''); setLogoutError('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
         {!supabase && <div className="setup-banner"><span><Sparkles size={16} /> You’re in local preview mode — connect Supabase to save online and publish a shareable link.</span><a href="#setup">How to connect <ArrowRight size={14} /></a></div>}
 
         <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="A little about you" subtitle="Start with the basics. Every good introduction starts somewhere."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Email address<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Address <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile picture</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Portfolio profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Drop in a photo of you</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">About me <span className="field-note">A few sentences in your own words</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="What do you care about? What kind of work gets you out of bed in the morning? Here’s your space to tell that story." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
@@ -420,7 +667,7 @@ function App() {
 
         <section className="editor-section manage-section" id="manage"><SectionHead number="08" icon={Globe2} title="Your portfolio, at a glance" subtitle="Preview, update, and manage the portfolio you’ve saved." />{store.hasSaved ? <div className="manage-card"><div className="manage-card-icon"><FileText size={19} /></div><div className="manage-card-info"><span className="eyebrow">{store.published ? 'LIVE PORTFOLIO' : 'SAVED DRAFT'} · {templates.find((item) => item.id === store.template)?.name}</span><h3>{portfolio.fullName || 'Your portfolio'}</h3><p>{store.published ? `${window.location.origin}/p/${store.slug}` : 'Your latest changes are saved. Preview or continue editing any time.'}</p></div><div className="manage-card-actions"><button className="button button-outline" onClick={() => setPreview(true)}><Eye size={15} /> View portfolio</button>{store.published && <a className="button button-outline" href={`/p/${encodeURIComponent(store.slug)}`} target="_blank" rel="noreferrer"><Globe2 size={15} /> Open live site</a>}<button className="button button-outline manage-edit" onClick={() => goToSection('about')}>Edit details <ArrowRight size={14} /></button><button className="button button-outline manage-delete" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 size={15} /> Delete</button></div>{confirmDelete && <div className="delete-confirm" role="alertdialog" aria-label="Confirm portfolio deletion"><span>Delete this portfolio and all its saved information? This can’t be undone.</span><button className="button button-outline" onClick={() => setConfirmDelete(false)} disabled={saving}>Keep it</button><button className="button button-delete" onClick={handleDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete portfolio'}</button></div>}</div> : <div className="manage-empty"><p>No portfolio saved yet. Add your details, then save a draft to manage it here.</p><button className="button button-outline" onClick={() => goToSection('about')}>Create your first portfolio <ArrowRight size={14} /></button></div>}</section>
 
-        <div className="finish-card"><div className="finish-icon"><Sparkles size={19} /></div><div><span className="eyebrow">THE FINISHING TOUCH</span><h2>Ready to make it yours?</h2><p>Save your details, generate a preview, then publish when it feels right.</p></div><div className="finish-actions"><button className="button button-outline" onClick={() => setPreview(true)}><Eye size={15} /> Preview</button><button className="button button-dark" disabled={saving} onClick={handleGenerate}><Sparkles size={15} /> Generate portfolio <ArrowUpRight size={14} /></button></div></div>
+        <div className="finish-card"><div className="finish-icon"><Sparkles size={19} /></div><div><span className="eyebrow">THE FINISHING TOUCH</span><h2>Ready to make it yours?</h2><p>Save your details, generate a preview, then publish when it feels right.</p></div><div className="finish-actions"><button className="button button-dark" disabled={saving} onClick={handleGenerate}><Sparkles size={15} /> Generate portfolio <ArrowUpRight size={14} /></button></div></div>
         <div className="builder-footer" id="setup"><span>MADE FOR YOUR NEXT CHAPTER <span className="footer-heart">✳</span></span><div><span>A STUDENT PROJECT, BUILT WITH CARE</span><a href="https://supabase.com" target="_blank" rel="noreferrer">DATABASE BY SUPABASE <ArrowUpRight size={12} /></a></div></div>
       </div>
     </main>
@@ -429,7 +676,17 @@ function App() {
 }
 
 function SectionHead({ number, icon: Icon, title, subtitle }) {
-  return <div className="section-head"><span className="section-icon"><Icon size={18} strokeWidth={1.7} /></span><div className="section-head-copy"><div className="section-kicker">CHAPTER {number}</div><h2>{title}</h2><p>{subtitle}</p></div></div>
+  const requiredTitles = {
+    'A little about you': 'Personal Information',
+    'The things you’ve learned': 'Educational Background',
+    'Your kind of magic': 'Skills',
+    'Things you’ve made': 'Projects',
+    'Where you’ve been': 'Work Experience',
+    'Find me around the internet': 'Social Media / Website Links',
+    'Find your look': 'Template Selection',
+    'Your portfolio, at a glance': 'Manage Portfolio',
+  }
+  return <div className="section-head"><span className="section-icon"><Icon size={18} strokeWidth={1.7} /></span><div className="section-head-copy"><div className="section-kicker">CHAPTER {number}</div><h2>{requiredTitles[title] || title}</h2><p>{subtitle}</p></div></div>
 }
 
 function TemplateMini({ template }) {
