@@ -10,7 +10,7 @@ A responsive portfolio builder for creating, editing, previewing, generating, an
 - **Technologies:** React, Vite, JavaScript, CSS, Lucide icons
 - **Cloud database:** Supabase Postgres, Supabase Auth, and Supabase Storage
 - **Hosting:** Vercel
-- **Published website URL:** [https://folio-foundry-du00r9efw-jvjohnvincentgimenez-5005.vercel.app](https://folio-foundry-du00r9efw-jvjohnvincentgimenez-5005.vercel.app)
+- **Published website URL:** [https://folio-foundry-alpha.vercel.app](https://folio-foundry-alpha.vercel.app)
 - **Portfolio designs:** Exactly three selectable templates — **Simple** (clean and professional with green accents), **Modern** (blue-accented project cards and structured sections), and **Creative** (purple accents, asymmetrical portrait, and offset project cards).
 - **Database structure:** `public.folio_foundry_portfolios` stores the owner UUID, unique URL slug, full name, selected template, remaining portfolio information as JSONB, public profile photo URL, publish status, and creation/update timestamps. Row-level security lets signed-in users read published portfolios and restricts editing/deletion to the portfolio owner. Profile images use the `folio-foundry-photos` Storage bucket.
 
@@ -64,4 +64,4 @@ The app uses Supabase Auth sessions and row-level security. Visitors can read on
 3. Deploy. Vercel builds with `npm run build`; `vercel.json` routes `/p/:slug` to the app, and signed-in users can open these portfolio pages directly.
 4. Redeploy after changing environment variables.
 
-The portfolio URL format is `https://folio-foundry-du00r9efw-jvjohnvincentgimenez-5005.vercel.app/p/your-portfolio-slug`. Users must sign in to view portfolio pages; each account can save and manage its own portfolio.
+The portfolio URL format is `https://folio-foundry-alpha.vercel.app/p/your-portfolio-slug`. Users must sign in to view portfolio pages; each account can save and manage its own portfolio.
