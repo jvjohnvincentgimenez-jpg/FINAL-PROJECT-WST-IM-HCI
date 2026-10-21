@@ -49,7 +49,7 @@ const safeHref = (value) => /^https?:\/\//i.test(value || '') ? value : '#'
 
 function usePortfolioStore(enabled = true) {
   const [ready, setReady] = useState(false)
-  const [userId, setUserId] = useState(null)
+  const userId = user.id
   const [portfolioId, setPortfolioId] = useState(null)
   const [portfolio, setPortfolio] = useState(emptyPortfolio)
   const [template, setTemplate] = useState('simple')
@@ -92,7 +92,7 @@ function usePortfolioStore(enabled = true) {
         if (!active) return
         setUserId(session.user.id)
         const { data, error: loadError } = await supabase
-          .from(portfolioTable).select('*').eq('owner_id', session.user.id).order('created_at').limit(1).maybeSingle()
+          .from(portfolioTable).select('*').eq('owner_id', userId).order('created_at').limit(1).maybeSingle()
         if (loadError) throw loadError
         if (data) {
           setPortfolioId(data.id)
@@ -146,23 +146,11 @@ function usePortfolioStore(enabled = true) {
       }
       image.src = objectUrl
     })
-    if (supabase) {
-      if (!userId) throw new Error('Your secure editing session is not ready. Please try again.')
-      const extension = 'jpg'
-      const path = `${userId}/${crypto.randomUUID()}.${extension}`
-      const { error: uploadError } = await supabase.storage.from(photoBucket).upload(path, optimizedFile, { upsert: true, contentType: 'image/jpeg' })
-      if (uploadError) throw uploadError
-      const { data } = supabase.storage.from(photoBucket).getPublicUrl(path)
-      updatePortfolio('image', data.publicUrl)
-    } else {
-      const image = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = () => reject(new Error('Could not read the selected image.'))
-        reader.readAsDataURL(optimizedFile)
-      })
-      updatePortfolio('image', image)
-    }
+    const path = `${userId}/${crypto.randomUUID()}.jpg`
+    const { error: uploadError } = await supabase.storage.from(photoBucket).upload(path, optimizedFile, { upsert: true, contentType: 'image/jpeg' })
+    if (uploadError) throw uploadError
+    const { data } = supabase.storage.from(photoBucket).getPublicUrl(path)
+    updatePortfolio('image', data.publicUrl)
   }
 
   async function save({ publish = false } = {}) {
@@ -171,15 +159,6 @@ function usePortfolioStore(enabled = true) {
     if (publish && !portfolio.fullName.trim()) throw new Error('Add your full name before publishing.')
     if (!nextSlug) throw new Error('Add a name to create a portfolio link.')
     const nextPublished = publish
-    if (!supabase) {
-      localStorage.setItem('folio-foundry', JSON.stringify({ content: portfolio, template, slug: nextSlug, published: nextPublished }))
-      setSlug(nextSlug)
-      setPublished(nextPublished)
-      setDirty(false)
-      setHasSaved(true)
-      return { local: true }
-    }
-    if (!userId) throw new Error('Your secure editing session is not ready. Please try again.')
     const values = {
       owner_id: userId, slug: nextSlug, full_name: portfolio.fullName.trim(),
       template, content: portfolio, profile_image: portfolio.image || null,
@@ -195,26 +174,21 @@ function usePortfolioStore(enabled = true) {
     setPublished(nextPublished)
     setDirty(false)
     setHasSaved(true)
-    return { local: false }
   }
 
   async function remove() {
     setError('')
     let photoCleanupError = ''
-    if (supabase) {
-      if (!userId || !portfolioId) throw new Error('Could not find a saved portfolio to delete.')
-      const { data: deleted, error: deleteError } = await supabase.from(portfolioTable)
-        .delete().eq('id', portfolioId).eq('owner_id', userId).select('id').maybeSingle()
-      if (deleteError) throw deleteError
-      if (!deleted) throw new Error('No portfolio was deleted. Refresh the page and try again.')
-      const photoPrefix = `${supabaseUrl}/storage/v1/object/public/${photoBucket}/`
-      const photoPath = portfolio.image?.startsWith(photoPrefix) ? portfolio.image.slice(photoPrefix.length) : ''
-      if (photoPath) {
-        const { error: storageError } = await supabase.storage.from(photoBucket).remove([decodeURIComponent(photoPath)])
-        if (storageError) photoCleanupError = storageError.message
-      }
-    } else {
-      localStorage.removeItem('folio-foundry')
+    if (!portfolioId) throw new Error('Could not find a saved portfolio to delete.')
+    const { data: deleted, error: deleteError } = await supabase.from(portfolioTable)
+      .delete().eq('id', portfolioId).eq('owner_id', userId).select('id').maybeSingle()
+    if (deleteError) throw deleteError
+    if (!deleted) throw new Error('No portfolio was deleted. Refresh the page and try again.')
+    const photoPrefix = `${supabaseUrl}/storage/v1/object/public/${photoBucket}/`
+    const photoPath = portfolio.image?.startsWith(photoPrefix) ? portfolio.image.slice(photoPrefix.length) : ''
+    if (photoPath) {
+      const { error: storageError } = await supabase.storage.from(photoBucket).remove([decodeURIComponent(photoPath)])
+      if (storageError) photoCleanupError = storageError.message
     }
     setPortfolioId(null)
     setPortfolio(emptyPortfolio)
@@ -223,7 +197,7 @@ function usePortfolioStore(enabled = true) {
     setPublished(false)
     setDirty(false)
     setHasSaved(false)
-    return { local: !supabase, photoCleanupError }
+    return { photoCleanupError }
   }
 
   const chooseTemplate = (value) => {
@@ -558,9 +532,9 @@ function App() {
     setNotice('')
     store.setError('')
     try {
-      const result = await store.save({ publish })
-      if (publish) setNotice(result.local ? 'Saved on this device. Connect Supabase to publish a public link.' : 'Your portfolio is live. Copy the link and share it with the world.')
-      else setNotice(result.local ? 'Draft saved on this device.' : 'All your changes are saved.')
+      await store.save({ publish })
+      if (publish) setNotice('Your portfolio is live. Copy the link and share it with the world.')
+      else setNotice('All your changes are saved.')
     } catch (error) {
       store.setError(error.message)
     } finally {
@@ -618,6 +592,16 @@ function App() {
     setSkillInput('')
   }
 
+  async function handleSignOut() {
+    try {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+      window.location.replace('/login')
+    } catch (signOutError) {
+      store.setError(`Could not sign out: ${signOutError.message}`)
+    }
+  }
+
   if (!store.ready) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>MAKING ROOM FOR YOUR STORY</span></div>
 
   return <div className="app-shell">
@@ -625,7 +609,7 @@ function App() {
       <a className="sidebar-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span><small>YOUR PORTFOLIO, MADE PERSONAL</small></span></a>
       <div className="sidebar-heading">YOUR PORTFOLIO</div>
       <nav className="sidebar-nav" aria-label="Portfolio sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
+      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={15} /> Sign out</button><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
     </aside>
     {mobileMenu && <button className="mobile-scrim" onClick={() => setMobileMenu(false)} aria-label="Close navigation" />}
 
