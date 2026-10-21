@@ -49,7 +49,7 @@ const safeHref = (value) => /^https?:\/\//i.test(value || '') ? value : '#'
 
 function usePortfolioStore(enabled = true) {
   const [ready, setReady] = useState(false)
-  const userId = user.id
+  const [userId, setUserId] = useState(null)
   const [portfolioId, setPortfolioId] = useState(null)
   const [portfolio, setPortfolio] = useState(emptyPortfolio)
   const [template, setTemplate] = useState('simple')
@@ -92,7 +92,7 @@ function usePortfolioStore(enabled = true) {
         if (!active) return
         setUserId(session.user.id)
         const { data, error: loadError } = await supabase
-          .from(portfolioTable).select('*').eq('owner_id', userId).order('created_at').limit(1).maybeSingle()
+          .from(portfolioTable).select('*').eq('owner_id', session.user.id).order('created_at').limit(1).maybeSingle()
         if (loadError) throw loadError
         if (data) {
           setPortfolioId(data.id)
