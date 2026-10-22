@@ -45,6 +45,8 @@ async function hashLocalPassword(password, saltHex = '') {
 const cleanSlug = (value) => value.toLowerCase().trim()
   .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
+const removeNameNumbers = (value) => value.replace(/[0-9]/g, '')
+const cleanPhone = (value = '') => String(value).replace(/[^\d+()\s.-]/g, '')
 const safeHref = (value) => /^https?:\/\//i.test(value || '') ? value : '#'
 
 function usePortfolioStore(enabled = true) {
@@ -70,7 +72,7 @@ function usePortfolioStore(enabled = true) {
         try {
           const saved = JSON.parse(localStorage.getItem('folio-foundry') || 'null')
           if (active && saved) {
-            setPortfolio({ ...emptyPortfolio, ...saved.content })
+            setPortfolio({ ...emptyPortfolio, ...saved.content, fullName: removeNameNumbers(saved.content?.fullName || ''), phone: cleanPhone(saved.content?.phone) })
             setTemplate(saved.template || 'simple')
             setSlug(saved.slug || '')
             setPublished(Boolean(saved.published))
@@ -96,15 +98,15 @@ function usePortfolioStore(enabled = true) {
         if (loadError) throw loadError
         if (data) {
           setPortfolioId(data.id)
-          setPortfolio({ ...emptyPortfolio, ...(data.content || {}), fullName: data.full_name || data.content?.fullName || '', image: data.profile_image || data.content?.image || '' })
+          setPortfolio({ ...emptyPortfolio, ...(data.content || {}), fullName: removeNameNumbers(data.full_name || data.content?.fullName || ''), phone: cleanPhone(data.content?.phone), image: data.profile_image || data.content?.image || '' })
           setTemplate(data.template)
           setSlug(data.slug)
           setPublished(data.is_published)
           setHasSaved(true)
         } else if (session.user.user_metadata?.portfolio_draft) {
-          setPortfolio({ ...emptyPortfolio, ...session.user.user_metadata.portfolio_draft })
+          setPortfolio({ ...emptyPortfolio, ...session.user.user_metadata.portfolio_draft, phone: cleanPhone(session.user.user_metadata.portfolio_draft.phone) })
         } else if (session.user.user_metadata?.full_name) {
-          setPortfolio((current) => ({ ...current, fullName: session.user.user_metadata.full_name }))
+          setPortfolio((current) => ({ ...current, fullName: removeNameNumbers(session.user.user_metadata.full_name) }))
         }
       } catch (loadError) {
         if (active) setError(`Database connection failed: ${loadError.message}`)
@@ -117,7 +119,12 @@ function usePortfolioStore(enabled = true) {
   }, [enabled])
 
   const updatePortfolio = (field, value) => {
-    setPortfolio((current) => ({ ...current, [field]: value }))
+    const nextValue = field === 'fullName'
+      ? removeNameNumbers(value)
+      : field === 'phone'
+        ? cleanPhone(value)
+        : value
+    setPortfolio((current) => ({ ...current, [field]: nextValue }))
     setDirty(true)
     setPublished(false)
   }
@@ -233,7 +240,7 @@ function PortfolioPage({ portfolio, template, isPublic = false, onClose, onLogou
   const theme = template || 'simple'
   return <div className={`portfolio-page ${templateClasses[theme] || templateClasses.simple}`}>
     {isPublic && <div className="public-ribbon"><span><Sparkles size={14} /> Made with Folio Foundry</span><div className="public-ribbon-actions"><a href="/builder" className="made-link">Make your own <ArrowUpRight size={14} /></a><button type="button" className="public-logout" onClick={onLogout}><LogOut size={13} /> Log out</button></div></div>}
-    <header className="portfolio-nav"><a href="#top" className="portfolio-brand"><span className="brand-mark">f.</span> {portfolio.fullName || 'Your name'}</a><nav>{portfolio.links?.filter((link) => safeHref(link.url) !== '#').slice(0, 3).map((link, index) => <a key={index} href={safeHref(link.url)} target="_blank" rel="noreferrer">{link.label || 'Connect'}</a>)}<a href="#contact">Say hello <ArrowUpRight size={14} /></a></nav>{onClose && <button className="preview-close" onClick={onClose} aria-label="Close preview"><X size={18} /></button>}</header>
+    <header className="portfolio-nav"><a href="#top" className="portfolio-brand"><span className="brand-mark">f.</span> {portfolio.fullName || 'Your name'}</a><nav aria-label="Portfolio links">{portfolio.links?.filter((link) => safeHref(link.url) !== '#').map((link, index) => <a key={index} href={safeHref(link.url)} target="_blank" rel="noreferrer">{link.label || 'Connect'} <ArrowUpRight size={14} /></a>)}</nav>{onClose && <button className="preview-close" onClick={onClose} aria-label="Close preview"><X size={18} /></button>}</header>
     <main id="top">
       <section className="portfolio-hero">
         <div className="portfolio-intro"><span className="eyebrow"><span className="live-dot" /> {portfolio.address || 'CREATIVE PORTFOLIO'}</span><h1>{portfolio.fullName || 'Your name'}<span className="hero-period">.</span></h1><p className="portfolio-about">{portfolio.about || 'A little about you goes here. Tell the world what you care about, what you make, and what makes your work yours.'}</p><a className="portfolio-cta" href="#work">Explore my work <ArrowDown size={15} /></a></div>
@@ -315,6 +322,18 @@ function LoginPage() {
   const loginFormRef = useRef(null)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authError = params.get('error_description') || params.get('error')
+    if (!authError) return
+    setFeedback({ type: 'error', message: authError })
+    params.delete('error')
+    params.delete('error_description')
+    params.delete('error_code')
+    const query = params.toString()
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
+  }, [])
+
+  useEffect(() => {
     const clearLoginForm = () => loginFormRef.current?.reset()
     window.addEventListener('pagehide', clearLoginForm)
     return () => window.removeEventListener('pagehide', clearLoginForm)
@@ -328,7 +347,7 @@ function LoginPage() {
       const form = new FormData(event.currentTarget)
       const email = String(form.get('email') || '').trim()
       const password = String(form.get('password') || '')
-      const fullName = String(form.get('fullName') || '').trim()
+      const fullName = removeNameNumbers(String(form.get('fullName') || '')).trim()
       if (mode === 'recovery') {
         if (!supabase) throw new Error('Password recovery requires a Supabase connection.')
         const { error } = await supabase.auth.updateUser({ password })
@@ -369,6 +388,28 @@ function LoginPage() {
         : error.message || 'Something went wrong. Please try again.'
       setFeedback({ type: 'error', message })
     } finally {
+      setBusy(false)
+    }
+  }
+
+  async function signInWithGoogle() {
+    if (!supabase) {
+      setFeedback({ type: 'error', message: 'Google sign-in requires a connected Supabase project.' })
+      return
+    }
+    setBusy(true)
+    setFeedback({ type: '', message: '' })
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/login` },
+      })
+      if (error) throw error
+    } catch (error) {
+      const message = error.message?.toLowerCase().includes('provider')
+        ? 'Google sign-in is not enabled yet. Enable the Google provider in your Supabase project and try again.'
+        : error.message || 'Could not start Google sign-in. Please try again.'
+      setFeedback({ type: 'error', message })
       setBusy(false)
     }
   }
@@ -414,12 +455,13 @@ function LoginPage() {
         <p className="login-subtitle">{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Create an account to save and manage your portfolio.'}</p>
         {!supabase && <div className="login-config-note" role="status">Accounts are saved only in this browser for now. They won’t sync across devices.</div>}
         {feedback.message && <div className={`login-feedback login-feedback-${feedback.type}`} role="status">{feedback.message}</div>}
+        {mode !== 'recovery' && supabase && <button className="google-login-button" type="button" onClick={signInWithGoogle} disabled={busy}><svg aria-hidden="true" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.8a20 20 0 0 0 0 18Z"/><path fill="#EA4335" d="M24 12.1c3 0 5.7 1 7.8 3.1l5.8-5.8A19.4 19.4 0 0 0 24 4 20 20 0 0 0 5.8 15l6.8 5.3c1.6-4.8 6.1-8.2 11.4-8.2Z"/></svg>Continue with Google</button>}
         <form ref={loginFormRef} className="login-form" onSubmit={submit}>
-          {mode === 'signup' && <label className="login-field">Full name<span className="login-input-wrap"><UserRound size={16} /><input name="fullName" type="text" autoComplete="name" placeholder="The name on your portfolio" maxLength={120} required /></span></label>}
+          {mode === 'signup' && <label className="login-field">Full name<span className="login-input-wrap"><UserRound size={16} /><input name="fullName" type="text" autoComplete="name" placeholder="The name on your portfolio" maxLength={120} onChange={(event) => { event.currentTarget.value = removeNameNumbers(event.currentTarget.value) }} required /></span></label>}
           {mode !== 'recovery' && <label className="login-field">Email address<span className="login-input-wrap"><Mail size={16} /><input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></span></label>}
           <label className="login-field">{mode === 'recovery' ? 'New password' : 'Password'}<span className="login-input-wrap"><LockKeyhole size={16} /><input name="password" type={passwordVisible ? 'text' : 'password'} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} placeholder="At least 8 characters" minLength={8} required /><button className="login-password-toggle" type="button" aria-label={passwordVisible ? 'Hide password' : 'Show password'} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <Eye size={16} /> : <EyeOff size={16} />}</button></span></label>
           {mode === 'signin' && <button className="login-forgot" type="button" onClick={requestPasswordReset} disabled={busy}>Forgot password?</button>}
-          <button className="button button-dark login-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : null}{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'recovery' ? 'Save new password' : 'Create account'}<ArrowRight size={16} /></button>
+          <button className="button button-dark login-submit" type="submit" disabled={busy}>{busy && <LoaderCircle className="login-submit-spinner spin" size={16} />}<span className="login-submit-label">{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'recovery' ? 'Save new password' : 'Create account'}</span><ArrowRight size={16} /></button>
         </form>
         {mode === 'recovery' ? <p className="login-switch">Back to <button type="button" onClick={() => { setMode('signin'); setFeedback({ type: '', message: '' }) }}>sign in</button></p> : <p className="login-switch">{mode === 'signin' ? 'New to Folio Foundry?' : 'Already have an account?'} <button type="button" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setFeedback({ type: '', message: '' }) }}>{mode === 'signin' ? 'Create an account' : 'Sign in'}</button></p>}
       </div>
@@ -444,6 +486,22 @@ function App() {
   const [loggingOut, setLoggingOut] = useState(false)
   const store = usePortfolioStore(builderPath)
   const { portfolio, updatePortfolio } = store
+  const accountUser = authSession?.user
+  const accountMetadata = accountUser?.user_metadata || {}
+  const accountIdentity = accountUser?.identities?.find((identity) => identity.provider === 'google')?.identity_data || {}
+  const profileDisplayName = accountMetadata.full_name
+    || accountMetadata.name
+    || accountIdentity.full_name
+    || accountIdentity.name
+    || authSession?.fullName
+    || accountUser?.email
+    || authSession?.email
+    || 'Your profile'
+  const accountPhoto = accountMetadata.avatar_url
+    || accountMetadata.picture
+    || accountIdentity.avatar_url
+    || accountIdentity.picture
+  const profileInitials = profileDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
   const [activeTab, setActiveTab] = useState('about')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -474,8 +532,32 @@ function App() {
     }
   }, [])
   useEffect(() => {
+    function animateButtonClick(event) {
+      if (!(event.target instanceof Element)) return
+      const button = event.target.closest('button:not(:disabled)')
+      if (!button) return
+      button.classList.remove('button-click-feedback')
+      void button.offsetWidth
+      button.classList.add('button-click-feedback')
+    }
+    function clearButtonFeedback(event) {
+      if (event.target instanceof Element && event.target.classList.contains('button-click-feedback')) {
+        event.target.classList.remove('button-click-feedback')
+      }
+    }
+    document.addEventListener('click', animateButtonClick)
+    document.addEventListener('animationend', clearButtonFeedback)
+    return () => {
+      document.removeEventListener('click', animateButtonClick)
+      document.removeEventListener('animationend', clearButtonFeedback)
+    }
+  }, [])
+  useEffect(() => {
     if (authReady && (supabase ? protectedRoute : dashboardPath || builderPath) && !authSession) window.location.replace('/login')
   }, [authReady, authSession, protectedRoute, dashboardPath, builderPath])
+  useEffect(() => {
+    if (loginPath && authReady && authSession) window.location.replace('/dashboard')
+  }, [authReady, authSession, loginPath])
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
@@ -592,24 +674,18 @@ function App() {
     setSkillInput('')
   }
 
-  async function handleSignOut() {
-    try {
-      const { error: signOutError } = await supabase.auth.signOut()
-      if (signOutError) throw signOutError
-      window.location.replace('/login')
-    } catch (signOutError) {
-      store.setError(`Could not sign out: ${signOutError.message}`)
-    }
-  }
-
   if (!store.ready) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>MAKING ROOM FOR YOUR STORY</span></div>
 
   return <div className="app-shell">
     <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
       <a className="sidebar-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span><small>YOUR PORTFOLIO, MADE PERSONAL</small></span></a>
+      <div className="sidebar-profile" aria-label={`My profile: ${profileDisplayName}`}>
+        <span className="profile-avatar">{accountPhoto ? <img src={accountPhoto} alt="" referrerPolicy="no-referrer" /> : profileInitials}</span>
+        <span className="profile-copy"><span>My profile</span><strong>{profileDisplayName}</strong></span>
+      </div>
       <div className="sidebar-heading">YOUR PORTFOLIO</div>
       <nav className="sidebar-nav" aria-label="Portfolio sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={15} /> Sign out</button><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
+      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
     </aside>
     {mobileMenu && <button className="mobile-scrim" onClick={() => setMobileMenu(false)} aria-label="Close navigation" />}
 
@@ -624,7 +700,8 @@ function App() {
             {saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}
             {saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}
           </span>
-          <button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving}><Check size={15} /> Save draft</button>
+          <button className="button button-outline button-preview" title="Preview portfolio" aria-label="Preview portfolio" onClick={() => setPreview(true)}><Eye size={15} /> Preview</button>
+          <button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving || (store.hasSaved && !store.dirty)}><Check size={15} /> Save draft</button>
           <button className="button button-dark button-publish" title={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} aria-label={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} onClick={() => handleSave(true)} disabled={saving || !supabase}>
             <Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} />
           </button>
@@ -635,7 +712,7 @@ function App() {
         {(store.error || notice || logoutError) && <div className={`notice ${store.error || logoutError ? 'notice-error' : 'notice-success'}`} role="status">{store.error || logoutError ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || logoutError || notice}{notice.includes('Your portfolio is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your portfolio link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice(''); setLogoutError('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
         {!supabase && <div className="setup-banner"><span><Sparkles size={16} /> You’re in local preview mode — connect Supabase to save online and publish a shareable link.</span><a href="#setup">How to connect <ArrowRight size={14} /></a></div>}
 
-        <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="A little about you" subtitle="Start with the basics. Every good introduction starts somewhere."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Email address<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Address <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile picture</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Portfolio profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Drop in a photo of you</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">About me <span className="field-note">A few sentences in your own words</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="What do you care about? What kind of work gets you out of bed in the morning? Here’s your space to tell that story." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
+        <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="A little about you" subtitle="Start with the basics. Every good introduction starts somewhere."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Email address<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" inputMode="tel" autoComplete="tel" maxLength={24} value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Address <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile picture</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Portfolio profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Drop in a photo of you</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">About me <span className="field-note">A few sentences in your own words</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="What do you care about? What kind of work gets you out of bed in the morning? Here’s your space to tell that story." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
 
         <section className="editor-section" id="education"><SectionHead number="02" icon={GraduationCap} title="The things you’ve learned" subtitle="School, a course, a long afternoon on YouTube — it all counts."/><RowEditor type="education" items={portfolio.education} onChange={(rows) => setRows('education', rows)} /><button className="add-entry" onClick={() => addRow('education')}><Plus size={16} /> Add education</button></section>
 

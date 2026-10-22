@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/login", "destination": "/" },
+    { "source": "/dashboard", "destination": "/" },
     { "source": "/builder", "destination": "/" },
     { "source": "/p/:slug", "destination": "/" }
   ]
