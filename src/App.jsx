@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import SupportAssistant from './SupportAssistant'
 import {
-  ArrowDown, ArrowRight, ArrowUpRight, BriefcaseBusiness, Check,
+  Activity, ArrowDown, ArrowRight, ArrowUpRight, BriefcaseBusiness, Check,
   CircleHelp, Code2, Eye, FileText, Globe2, GraduationCap, ImagePlus, Layers2, Link2,
-  EyeOff, LoaderCircle, LockKeyhole, LogOut, Mail, Menu, Palette, Plus, Sparkles, Trash2, UserRound, X,
+  EyeOff, LoaderCircle, LockKeyhole, LogOut, Mail, Menu, Palette, Plus, ShieldCheck, Sparkles, Trash2, UserRound, X,
 } from 'lucide-react'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -14,9 +15,9 @@ const photoBucket = 'folio-foundry-photos'
 const localAccountsKey = 'folio-foundry-accounts'
 const localSessionKey = 'folio-foundry-session'
 const templates = [
-  { id: 'simple', name: 'Simple', style: 'Professional', description: 'A clear, classic layout with calm colors and easy-to-read sections.', accent: 'SAGE' },
-  { id: 'modern', name: 'Modern', style: 'Card-based', description: 'A bold, structured layout with visual project cards and crisp details.', accent: 'BLUE' },
-  { id: 'creative', name: 'Creative', style: 'Expressive', description: 'A playful, asymmetrical arrangement with vivid color and personality.', accent: 'VIOLET' },
+  { id: 'simple', name: 'Simple', style: 'SECURITY CASE FILE', description: 'A clear, editorial layout for case studies, certifications, and security experience.', accent: 'FOREST' },
+  { id: 'modern', name: 'Modern', style: 'SOC DASHBOARD', description: 'A data-inspired command center for projects, tools, and threat research.', accent: 'CYAN' },
+  { id: 'creative', name: 'Creative', style: 'RED TEAM SIGNAL', description: 'A bold, expressive portfolio for independent researchers and unconventional thinkers.', accent: 'VIOLET' },
 ]
 
 const emptyPortfolio = {
@@ -223,10 +224,10 @@ function usePortfolioStore(enabled = true) {
 
 function RowEditor({ type, items, onChange }) {
   const fields = {
-    education: [['school', 'School / institution', 'e.g. University of the Philippines'], ['degree', 'Degree / course', 'e.g. BS Information Technology'], ['year', 'Year', 'e.g. 2022 – 2026']],
-    projects: [['name', 'Project name', 'e.g. Mindful — habit tracker'], ['description', 'What did you make?', 'A short description of your project'], ['url', 'Project link', 'https://']],
-    experience: [['role', 'Your role', 'e.g. Product design intern'], ['company', 'Company / organization', 'e.g. Studio North'], ['period', 'When', 'e.g. Jun 2024 – Present'], ['description', 'What did you do?', 'A little about your contribution']],
-    links: [['label', 'Link label', 'e.g. LinkedIn'], ['url', 'URL', 'https://']],
+    education: [['school', 'School / certifying organization', 'e.g. University of the Philippines'], ['degree', 'Degree / certification', 'e.g. BS Cybersecurity, Security+'], ['year', 'Year', 'e.g. 2022 – 2026']],
+    projects: [['name', 'Project / research title', 'e.g. Security awareness toolkit'], ['description', 'What did you investigate or build?', 'A responsible security project or research summary'], ['url', 'Project / write-up link', 'https://']],
+    experience: [['role', 'Security role', 'e.g. SOC analyst'], ['company', 'Organization', 'e.g. Security operations team'], ['period', 'When', 'e.g. Jun 2024 – Present'], ['description', 'Your responsibilities and impact', 'Describe your defensive security work']],
+    links: [['label', 'Platform / link label', 'e.g. LinkedIn, GitHub, TryHackMe'], ['url', 'Profile URL', 'https://']],
   }[type]
   return <div className="row-stack">{items.map((item, index) => (
     <div className="repeat-card" key={`${type}-${index}`}>
@@ -239,8 +240,8 @@ function RowEditor({ type, items, onChange }) {
 function PortfolioPage({ portfolio, template, isPublic = false, onClose, onLogout }) {
   const theme = template || 'simple'
   return <div className={`portfolio-page ${templateClasses[theme] || templateClasses.simple}`}>
-    {isPublic && <div className="public-ribbon"><span><Sparkles size={14} /> Made with Folio Foundry</span><div className="public-ribbon-actions"><a href="/builder" className="made-link">Make your own <ArrowUpRight size={14} /></a><button type="button" className="public-logout" onClick={onLogout}><LogOut size={13} /> Log out</button></div></div>}
-    <header className="portfolio-nav"><a href="#top" className="portfolio-brand"><span className="brand-mark">f.</span> {portfolio.fullName || 'Your name'}</a><nav aria-label="Portfolio links">{portfolio.links?.filter((link) => safeHref(link.url) !== '#').map((link, index) => <a key={index} href={safeHref(link.url)} target="_blank" rel="noreferrer">{link.label || 'Connect'} <ArrowUpRight size={14} /></a>)}</nav>{onClose && <button className="preview-close" onClick={onClose} aria-label="Close preview"><X size={18} /></button>}</header>
+    {isPublic && <div className="public-ribbon"><span><ShieldCheck size={14} /> A NEXUS SECURITY PROFILE</span><div className="public-ribbon-actions"><a href="/builder" className="made-link">Build your profile <ArrowUpRight size={14} /></a><button type="button" className="public-logout" onClick={onLogout}><LogOut size={13} /> Log out</button></div></div>}
+    <header className="portfolio-nav"><a href="#top" className="portfolio-brand"><span className="brand-mark"><ShieldCheck size={18} /></span> {portfolio.fullName || 'Your name'}</a><nav aria-label="Portfolio links">{portfolio.links?.filter((link) => safeHref(link.url) !== '#').map((link, index) => <a key={index} href={safeHref(link.url)} target="_blank" rel="noreferrer">{link.label || 'Connect'} <ArrowUpRight size={14} /></a>)}</nav>{onClose && <button className="preview-close" onClick={onClose} aria-label="Close preview"><X size={18} /></button>}</header>
     <main id="top">
       <section className="portfolio-hero">
         <div className="portfolio-intro"><span className="eyebrow"><span className="live-dot" /> {portfolio.address || 'CREATIVE PORTFOLIO'}</span><h1>{portfolio.fullName || 'Your name'}<span className="hero-period">.</span></h1><p className="portfolio-about">{portfolio.about || 'A little about you goes here. Tell the world what you care about, what you make, and what makes your work yours.'}</p><a className="portfolio-cta" href="#work">Explore my work <ArrowDown size={15} /></a></div>
@@ -278,35 +279,46 @@ function PublicPortfolio({ slug, onLogout }) {
     return () => { active = false }
   }, [slug])
   if (record) return <PortfolioPage portfolio={record} template={record.template || 'simple'} isPublic onLogout={onLogout} />
-  return <div className="public-state"><div className="brand-mark">f.</div>{error ? <><h1>Portfolio not found.</h1><p>{error}</p></> : <><LoaderCircle className="spin" /><p>Opening this portfolio…</p></>}</div>
+  return <div className="public-state"><div className="brand-mark"><ShieldCheck size={19} /></div>{error ? <><h1>Profile not found.</h1><p>{error}</p></> : <><LoaderCircle className="spin" /><p>Opening this profile…</p></>}</div>
 }
 
 function HomePage() {
   return <main className="home-page">
     <header className="home-nav">
-      <a className="home-brand" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
+      <a className="home-brand" href="/" aria-label="Nexus Security home"><span className="brand-mark"><ShieldCheck size={19} /></span><span>NEXUS<span className="logo-light">SECURITY</span></span></a>
+      <div className="home-nav-actions"><span className="home-nav-status"><span className="live-dot" /> PROFILE STUDIO</span><a className="button button-outline" href="/login">Sign in <ArrowRight size={14} /></a></div>
     </header>
     <section className="home-hero">
-      <div className="home-hero-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span><h1>Make your work<br />impossible to <em>miss.</em></h1><p>Build a personal portfolio from the work, experience, and ideas you already have. Make it yours, then share it with the world.</p><div className="home-actions"><a className="button button-dark" href="/login">Log in <ArrowRight size={15} /></a></div><div className="home-proof"><span><Check size={14} /> Three distinct designs</span></div></div>
-      <div className="home-brand-showcase" aria-label="Folio Foundry brand mark"><span className="home-brand-orbit home-brand-orbit-outer" /><span className="home-brand-orbit home-brand-orbit-inner" /><span className="brand-mark home-showcase-mark">f.</span><span className="home-showcase-name">foliofoundry</span><span className="home-showcase-caption">YOUR STORY, TAKING SHAPE</span></div>
+      <div className="home-hero-copy"><span className="eyebrow"><ShieldCheck size={15} /> CYBERSECURITY PORTFOLIO STUDIO</span><h1>Make your work<br />count in <em>cybersecurity.</em></h1><p>Showcase your security projects, research, and experience in a portfolio that proves what you can do. Built for the people making the internet safer.</p><div className="home-actions"><a className="button button-dark" href="/login?mode=signup">Build your profile <ArrowRight size={15} /></a><a className="home-secondary-link" href="#designs">Explore the platform <ArrowDown size={14} /></a></div><div className="home-proof"><span><Check size={14} /> Research &amp; threat analysis</span><span><Check size={14} /> Projects &amp; certifications</span></div></div>
+      <div className="home-brand-showcase" aria-label="Preview of a cybersecurity professional profile">
+        <div className="profile-preview-card">
+          <div className="profile-preview-top"><span><ShieldCheck size={14} /> NEXUS / SECURITY</span><span>SAMPLE PROFILE</span></div>
+          <div className="profile-preview-person"><span className="profile-preview-avatar"><ShieldCheck size={24} /></span><div><span>CYBERSECURITY PROFESSIONAL</span><strong>Your name here</strong><small>Security researcher · Threat analyst</small></div><span className="profile-preview-verified"><Check size={14} /></span></div>
+          <div className="profile-preview-divider" />
+          <span className="profile-preview-label">AREAS OF FOCUS</span>
+          <div className="profile-preview-tags"><span>THREAT RESEARCH</span><span>INCIDENT RESPONSE</span><span>CLOUD SECURITY</span></div>
+          <div className="profile-preview-work"><span>FEATURED WORK</span><div><span className="profile-preview-work-icon"><Activity size={16} /></span><span><strong>Security research &amp; projects</strong><small>Showcase the work behind the defense.</small></span><ArrowRight size={14} /></div></div>
+        </div>
+        <span className="home-showcase-caption">YOUR WORK. YOUR SIGNAL.</span>
+      </div>
     </section>
-    <section className="home-designs" id="designs"><div className="home-section-heading"><div><span className="eyebrow">A STARTING POINT, NOT A BOX</span><h2>Find a look that feels like you.</h2></div></div><div className="home-template-grid">{templates.map((template) => <article className="home-template" key={template.id}><div><span>{template.style}</span><h3>{template.name}</h3><p>{template.description}</p></div></article>)}</div></section>
-    <footer className="home-footer"><a className="home-brand" href="/"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a><span>MADE FOR YOUR NEXT CHAPTER</span></footer>
+    <section className="home-designs" id="designs"><div className="home-section-heading"><div><span className="eyebrow">THREE WAYS TO SHOW YOUR SECURITY WORK</span><h2>Choose your security signal.</h2></div><span className="home-design-caption">Each design is built for the work you do.</span></div><div className="home-template-grid">{templates.map((template) => <article className={`home-template home-template-${template.id}`} key={template.id}><TemplateMini template={template.id} /><div className="home-template-copy"><span>{template.style}</span><h3>{template.name}</h3><p>{template.description}</p></div></article>)}</div></section>
+    <footer className="home-footer"><a className="home-brand" href="/"><span className="brand-mark"><ShieldCheck size={16} /></span><span>NEXUS<span className="logo-light">SECURITY</span></span></a><span>DEFENSE STARTS WITH PEOPLE.</span><span>© {new Date().getFullYear()} NEXUS SYSTEMS</span></footer>
   </main>
 }
 
 function WorkspaceHome({ displayName, onLogout, loggingOut }) {
   return <main className="workspace-home">
     <header className="workspace-home-header">
-      <a className="home-brand" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
+      <a className="home-brand" href="/" aria-label="Nexus Security home"><span className="brand-mark"><ShieldCheck size={18} /></span><span>NEXUS<span className="logo-light">SECURITY</span></span></a>
       <button className="button button-outline" onClick={onLogout} disabled={loggingOut}>{loggingOut ? <LoaderCircle size={15} className="spin" /> : <LogOut size={15} />}<span>{loggingOut ? 'Signing out…' : 'Log out'}</span></button>
     </header>
     <section className="workspace-home-main">
-      <span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER STARTS HERE</span>
+      <span className="eyebrow"><ShieldCheck size={14} /> SECURE CYBERSECURITY WORKSPACE</span>
       <h1>Welcome back{displayName ? `, ${displayName}` : ''}.</h1>
-      <p>Your work, experience, and ideas belong in one place. Pick up where you left off.</p>
-      <a className="button button-dark workspace-home-edit" href="/builder">Edit your portfolio <ArrowRight size={15} /></a>
-      <div className="workspace-home-footer"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div>
+      <p>Your security profile, projects, and experience are ready. Keep building your signal in the cybersecurity community.</p>
+      <a className="button button-dark workspace-home-edit" href="/builder">Open your security profile <ArrowRight size={15} /></a>
+      <div className="workspace-home-footer"><span className="live-dot" /> YOUR SECURITY WORK. YOUR SPACE.</div>
     </section>
   </main>
 }
@@ -400,6 +412,20 @@ function LoginPage() {
     setBusy(true)
     setFeedback({ type: '', message: '' })
     try {
+      let healthResponse
+      try {
+        healthResponse = await fetch(`${supabaseUrl}/auth/v1/health`, {
+          method: 'GET',
+          headers: { apikey: supabaseKey },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(8000),
+        })
+      } catch {
+        throw new Error('Can’t reach the configured Supabase project. Check VITE_SUPABASE_URL in .env.local, then restart the dev server. In Supabase, copy the Project URL from Project Settings → API.')
+      }
+      if (!healthResponse.ok) {
+        throw new Error('The configured Supabase project did not respond to its health check. Verify VITE_SUPABASE_URL in .env.local and restart the dev server.')
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: `${window.location.origin}/login` },
@@ -442,17 +468,17 @@ function LoginPage() {
   }
 
   return <main className="login-page">
-    <section className="login-story" aria-label="Folio Foundry">
-      <a className="sidebar-logo login-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span></span></a>
-      <div className="login-story-copy"><span className="eyebrow"><Sparkles size={14} /> YOUR NEXT CHAPTER</span><h1>Make room<br />for <em>your story.</em></h1><p>Gather your work, your ideas, and everything that makes your next step yours.</p></div>
-      <div className="login-story-art" aria-hidden="true"><span className="login-orbit login-orbit-one" /><span className="login-orbit login-orbit-two" /><span className="login-art-mark">f.</span><span className="login-art-note">MADE<br />BY YOU</span><Sparkles className="login-art-sparkle" size={18} /></div>
-      <span className="login-story-caption">A PORTFOLIO BUILDER FOR WHAT’S NEXT</span>
+    <section className="login-story" aria-label="Nexus Security">
+      <a className="sidebar-logo login-logo" href="/" aria-label="Nexus Security home"><span className="brand-mark"><ShieldCheck size={19} /></span><span>NEXUS<span className="logo-light">SECURITY</span></span></a>
+      <div className="login-story-copy"><span className="eyebrow"><ShieldCheck size={14} /> TRUST IS BUILT, NOT CLAIMED</span><h1>Show the work<br />behind a <em>safer world.</em></h1><p>Bring your security research, hands-on projects, and experience together in one professional profile.</p></div>
+      <div className="login-story-art" aria-hidden="true"><span className="login-orbit login-orbit-one" /><span className="login-orbit login-orbit-two" /><span className="login-art-mark"><ShieldCheck size={68} strokeWidth={1.25} /></span><span className="login-art-note">VERIFY<br />YOUR SIGNAL</span><Sparkles className="login-art-sparkle" size={18} /></div>
+      <span className="login-story-caption">CYBERSECURITY WORK, MADE VISIBLE</span>
     </section>
     <section className="login-panel">
       <div className="login-form-wrap">
-        <span className="login-kicker">YOUR WORKSPACE</span>
+        <span className="login-kicker"><ShieldCheck size={13} /> SECURE ACCESS</span>
         <h2>{mode === 'signin' ? 'Welcome back.' : mode === 'recovery' ? 'Reset your password.' : 'Start your story.'}</h2>
-        <p className="login-subtitle">{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Create an account to save and manage your portfolio.'}</p>
+        <p className="login-subtitle">{mode === 'signin' ? 'Sign in to continue building your cybersecurity profile.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Create an account to showcase your security work.'}</p>
         {!supabase && <div className="login-config-note" role="status">Accounts are saved only in this browser for now. They won’t sync across devices.</div>}
         {feedback.message && <div className={`login-feedback login-feedback-${feedback.type}`} role="status">{feedback.message}</div>}
         {mode !== 'recovery' && supabase && <button className="google-login-button" type="button" onClick={signInWithGoogle} disabled={busy}><svg aria-hidden="true" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.8a20 20 0 0 0 0 18Z"/><path fill="#EA4335" d="M24 12.1c3 0 5.7 1 7.8 3.1l5.8-5.8A19.4 19.4 0 0 0 24 4 20 20 0 0 0 5.8 15l6.8 5.3c1.6-4.8 6.1-8.2 11.4-8.2Z"/></svg>Continue with Google</button>}
@@ -463,9 +489,9 @@ function LoginPage() {
           {mode === 'signin' && <button className="login-forgot" type="button" onClick={requestPasswordReset} disabled={busy}>Forgot password?</button>}
           <button className="button button-dark login-submit" type="submit" disabled={busy}>{busy && <LoaderCircle className="login-submit-spinner spin" size={16} />}<span className="login-submit-label">{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'recovery' ? 'Save new password' : 'Create account'}</span><ArrowRight size={16} /></button>
         </form>
-        {mode === 'recovery' ? <p className="login-switch">Back to <button type="button" onClick={() => { setMode('signin'); setFeedback({ type: '', message: '' }) }}>sign in</button></p> : <p className="login-switch">{mode === 'signin' ? 'New to Folio Foundry?' : 'Already have an account?'} <button type="button" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setFeedback({ type: '', message: '' }) }}>{mode === 'signin' ? 'Create an account' : 'Sign in'}</button></p>}
+        {mode === 'recovery' ? <p className="login-switch">Back to <button type="button" onClick={() => { setMode('signin'); setFeedback({ type: '', message: '' }) }}>sign in</button></p> : <p className="login-switch">{mode === 'signin' ? 'New to Nexus Security?' : 'Already have an account?'} <button type="button" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setFeedback({ type: '', message: '' }) }}>{mode === 'signin' ? 'Create an account' : 'Sign in'}</button></p>}
       </div>
-      <footer className="login-footer"><span>MADE FOR YOUR NEXT CHAPTER</span><span>FOLIO FOUNDRY · 2026</span></footer>
+      <footer className="login-footer"><span>YOUR SECURITY WORK, VERIFIED BY YOU</span><span>NEXUS SECURITY · 2026</span></footer>
     </section>
   </main>
 }
@@ -476,7 +502,7 @@ function App() {
   const dashboardPath = currentPath === '/dashboard'
   const builderPath = currentPath === '/builder'
   const path = window.location.pathname.match(/^\/p\/([^/]+)\/?$/)
-  const protectedRoute = dashboardPath || builderPath || Boolean(path)
+  const protectedRoute = dashboardPath || builderPath
   const [authReady, setAuthReady] = useState(!supabase)
   const [authSession, setAuthSession] = useState(() => {
     if (supabase) return null
@@ -502,6 +528,7 @@ function App() {
     || accountIdentity.avatar_url
     || accountIdentity.picture
   const profileInitials = profileDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  const withSupportAssistant = (page) => <>{page}<SupportAssistant /></>
   const [activeTab, setActiveTab] = useState('about')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -588,23 +615,22 @@ function App() {
     }
   }
 
-  if ((dashboardPath || builderPath) && (!authReady || !authSession)) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>{authReady ? 'REDIRECTING TO SIGN IN' : 'CHECKING YOUR ACCOUNT'}</span></div>
-  if (supabase && path && !authReady) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>CHECKING YOUR ACCOUNT</span></div>
-  if (supabase && protectedRoute && !authSession) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>REDIRECTING TO SIGN IN</span></div>
-  if (path) return <PublicPortfolio slug={decodeURIComponent(path[1])} onLogout={handleLogout} />
-  if (loginPath) return <LoginPage />
-  if (dashboardPath) return <WorkspaceHome displayName={authSession?.fullName || authSession?.user?.user_metadata?.full_name || ''} onLogout={handleLogout} loggingOut={loggingOut} />
-  if (!builderPath) return <HomePage />
+  if ((dashboardPath || builderPath) && (!authReady || !authSession)) return <div className="loading-screen"><div className="brand-mark"><ShieldCheck size={19} /></div><LoaderCircle className="spin" /><span>{authReady ? 'REDIRECTING TO SECURE ACCESS' : 'VERIFYING YOUR SESSION'}</span></div>
+  if (supabase && protectedRoute && !authSession) return <div className="loading-screen"><div className="brand-mark"><ShieldCheck size={19} /></div><LoaderCircle className="spin" /><span>REDIRECTING TO SECURE ACCESS</span></div>
+  if (path) return withSupportAssistant(<PublicPortfolio slug={decodeURIComponent(path[1])} onLogout={handleLogout} />)
+  if (loginPath) return withSupportAssistant(<LoginPage />)
+  if (dashboardPath) return withSupportAssistant(<WorkspaceHome displayName={authSession?.fullName || authSession?.user?.user_metadata?.full_name || ''} onLogout={handleLogout} loggingOut={loggingOut} />)
+  if (!builderPath) return withSupportAssistant(<HomePage />)
 
   const sections = [
-    { id: 'about', label: 'Portfolio information', icon: UserRound },
-    { id: 'education', label: 'Education', icon: GraduationCap },
-    { id: 'skills', label: 'Skills', icon: Code2 },
-    { id: 'projects', label: 'Projects', icon: Layers2 },
-    { id: 'experience', label: 'Experience', icon: BriefcaseBusiness },
-    { id: 'links', label: 'Links & socials', icon: Link2 },
-    { id: 'design', label: 'Template selection', icon: Palette },
-    { id: 'manage', label: 'Manage portfolio', icon: Globe2 },
+    { id: 'about', label: 'Security profile', icon: UserRound },
+    { id: 'education', label: 'Education & certs', icon: GraduationCap },
+    { id: 'skills', label: 'Skills & focus', icon: Code2 },
+    { id: 'projects', label: 'Security projects', icon: Layers2 },
+    { id: 'experience', label: 'Security experience', icon: BriefcaseBusiness },
+    { id: 'links', label: 'Research & links', icon: Link2 },
+    { id: 'design', label: 'Profile design', icon: Palette },
+    { id: 'manage', label: 'Publish profile', icon: Globe2 },
   ]
   const addRow = (type) => updatePortfolio(type, [...portfolio[type], { ...defaultRows[type] }])
   const setRows = (type, rows) => updatePortfolio(type, rows)
@@ -615,8 +641,8 @@ function App() {
     store.setError('')
     try {
       await store.save({ publish })
-      if (publish) setNotice('Your portfolio is live. Copy the link and share it with the world.')
-      else setNotice('All your changes are saved.')
+      if (publish) setNotice('Your security profile is live. Copy the link to share your experience and research.')
+      else setNotice('Your security profile draft has been saved.')
     } catch (error) {
       store.setError(error.message)
     } finally {
@@ -630,7 +656,7 @@ function App() {
     try {
       await store.save()
       setPreview(true)
-      setNotice('Portfolio saved. You can preview it here, then publish it when you’re ready.')
+      setNotice('Security profile saved. Preview it here, then publish it when you’re ready.')
     } catch (error) {
       store.setError(`Could not generate your portfolio: ${error.message}`)
     } finally {
@@ -674,18 +700,18 @@ function App() {
     setSkillInput('')
   }
 
-  if (!store.ready) return <div className="loading-screen"><div className="brand-mark">f.</div><LoaderCircle className="spin" /><span>MAKING ROOM FOR YOUR STORY</span></div>
+  if (!store.ready) return <div className="loading-screen"><div className="brand-mark"><ShieldCheck size={19} /></div><LoaderCircle className="spin" /><span>SECURING YOUR WORKSPACE</span></div>
 
-  return <div className="app-shell">
+  return <><div className="app-shell">
     <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
-      <a className="sidebar-logo" href="/" aria-label="Folio Foundry home"><span className="brand-mark">f.</span><span>folio<span className="logo-light">foundry</span><small>YOUR PORTFOLIO, MADE PERSONAL</small></span></a>
-      <div className="sidebar-profile" aria-label={`My profile: ${profileDisplayName}`}>
+      <a className="sidebar-logo" href="/" aria-label="Nexus Security home"><span className="brand-mark"><ShieldCheck size={19} /></span><span>NEXUS<span className="logo-light">SECURITY</span><small>CYBERSECURITY PORTFOLIO STUDIO</small></span></a>
+      <div className="sidebar-profile" aria-label={`Security profile owner: ${profileDisplayName}`}>
         <span className="profile-avatar">{accountPhoto ? <img src={accountPhoto} alt="" referrerPolicy="no-referrer" /> : profileInitials}</span>
-        <span className="profile-copy"><span>My profile</span><strong>{profileDisplayName}</strong></span>
+        <span className="profile-copy"><span>Security profile</span><strong>{profileDisplayName}</strong></span>
       </div>
-      <div className="sidebar-heading">YOUR PORTFOLIO</div>
-      <nav className="sidebar-nav" aria-label="Portfolio sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>YOUR STORY SO FAR</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>A few more details make your portfolio shine.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Need a little help?</a><div className="sidebar-footnote"><span className="live-dot" /> YOUR IDEAS, YOUR SPACE.</div></div>
+      <div className="sidebar-heading">SECURITY PROFILE</div>
+      <nav className="sidebar-nav" aria-label="Security profile sections">{sections.map(({ id, label, icon: Icon }, index) => <button key={id} className={`nav-item ${activeTab === id ? 'nav-active' : ''}`} onClick={() => goToSection(id)}><Icon size={17} strokeWidth={1.8} /><span>{label}</span><span className="nav-num">{String(index + 1).padStart(2, '0')}</span></button>)}</nav>
+      <div className="sidebar-bottom"><div className="progress-card"><div className="progress-top"><span>PROFILE COMPLETENESS</span><span>{completeness}%</span></div><div className="progress-track"><span style={{ width: `${completeness}%` }} /></div><p>Add projects and skills to strengthen your signal.</p></div><a className="help-link" href="mailto:hello@foliofoundry.site"><CircleHelp size={16} /> Contact support</a><div className="sidebar-footnote"><span className="live-dot" /> BUILT FOR A SAFER INTERNET.</div></div>
     </aside>
     {mobileMenu && <button className="mobile-scrim" onClick={() => setMobileMenu(false)} aria-label="Close navigation" />}
 
@@ -693,47 +719,47 @@ function App() {
       <header className="topbar">
         <div className="topbar-left">
           <button className="mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Open navigation"><Menu /></button>
-          <span className="breadcrumb">My workspace <span>/</span> <strong>Portfolio builder</strong></span>
+          <span className="breadcrumb">Nexus Security <span>/</span> <strong>Profile builder</strong></span>
         </div>
         <div className="topbar-actions">
           <span className={`save-status ${saving ? '' : store.dirty ? 'is-dirty' : 'is-saved'}`}>
             {saving ? <LoaderCircle size={14} className="spin" /> : store.dirty ? <CircleHelp size={14} /> : store.published ? <Globe2 size={14} /> : <Check size={14} />}
-            {saving ? 'Saving changes…' : store.dirty ? 'Unsaved changes' : store.published ? 'Published' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}
+            {saving ? 'Saving profile…' : store.dirty ? 'Unsaved changes' : store.published ? 'Profile live' : store.hasSaved ? 'Changes saved' : 'Ready to begin'}
           </span>
-          <button className="button button-outline button-preview" title="Preview portfolio" aria-label="Preview portfolio" onClick={() => setPreview(true)}><Eye size={15} /> Preview</button>
-          <button className="button button-outline button-save" title="Save draft" aria-label="Save draft" onClick={() => handleSave(false)} disabled={saving || (store.hasSaved && !store.dirty)}><Check size={15} /> Save draft</button>
-          <button className="button button-dark button-publish" title={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} aria-label={supabase ? 'Publish portfolio' : 'Connect Supabase to publish'} onClick={() => handleSave(true)} disabled={saving || !supabase}>
-            <Globe2 size={16} /> {store.published ? 'Update site' : 'Publish site'} <ArrowUpRight size={14} />
+          <button className="button button-outline button-preview" title="Preview security profile" aria-label="Preview security profile" onClick={() => setPreview(true)}><Eye size={15} /> Preview</button>
+          <button className="button button-outline button-save" title="Save profile draft" aria-label="Save profile draft" onClick={() => handleSave(false)} disabled={saving || (store.hasSaved && !store.dirty)}><Check size={15} /> Save draft</button>
+          <button className="button button-dark button-publish" title={supabase ? 'Publish security profile' : 'Connect Supabase to publish'} aria-label={supabase ? 'Publish security profile' : 'Connect Supabase to publish'} onClick={() => handleSave(true)} disabled={saving || !supabase}>
+            <Globe2 size={16} /> {store.published ? 'Update profile' : 'Publish profile'} <ArrowUpRight size={14} />
           </button>
           <button className="button button-outline button-logout" onClick={handleLogout} disabled={loggingOut} title="Log out">{loggingOut ? <LoaderCircle size={15} className="spin" /> : <LogOut size={15} />}<span>{loggingOut ? 'Signing out…' : 'Log out'}</span></button>
         </div>
       </header>
       <div className="builder-content">
-        {(store.error || notice || logoutError) && <div className={`notice ${store.error || logoutError ? 'notice-error' : 'notice-success'}`} role="status">{store.error || logoutError ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || logoutError || notice}{notice.includes('Your portfolio is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your portfolio link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice(''); setLogoutError('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
-        {!supabase && <div className="setup-banner"><span><Sparkles size={16} /> You’re in local preview mode — connect Supabase to save online and publish a shareable link.</span><a href="#setup">How to connect <ArrowRight size={14} /></a></div>}
+        {(store.error || notice || logoutError) && <div className={`notice ${store.error || logoutError ? 'notice-error' : 'notice-success'}`} role="status">{store.error || logoutError ? <CircleHelp size={16} /> : <Check size={16} />}<span>{store.error || logoutError || notice}{notice.includes('Your security profile is live') && store.published && <button className="copy-link" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/p/${store.slug}`); setNotice('Your security profile link has been copied to the clipboard.') } catch { store.setError('Could not copy automatically. Your profile link is shown in the design section.') } }}><Link2 size={13} /> Copy link</button>}{store.error?.includes('unique') && ' Try a different custom website link.'}</span><button className="notice-dismiss" onClick={() => { store.setError(''); setNotice(''); setLogoutError('') }} aria-label="Dismiss notice"><X size={15} /></button></div>}
+        {!supabase && <div className="setup-banner"><span><ShieldCheck size={16} /> Local preview mode — connect Supabase to securely save and publish your profile online.</span><a href="#setup">Connection setup <ArrowRight size={14} /></a></div>}
 
-        <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="A little about you" subtitle="Start with the basics. Every good introduction starts somewhere."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Email address<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" inputMode="tel" autoComplete="tel" maxLength={24} value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Address <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile picture</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Portfolio profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Drop in a photo of you</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">About me <span className="field-note">A few sentences in your own words</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="What do you care about? What kind of work gets you out of bed in the morning? Here’s your space to tell that story." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
+        <section className="editor-section section-about" id="about"><SectionHead number="01" icon={UserRound} title="Your security profile" subtitle="Introduce yourself and the security work you care about."/><div className="editor-grid about-grid"><div className="field-stack"><label className="field">Full name <span className="required">*</span><input value={portfolio.fullName} onChange={(event) => updatePortfolio('fullName', event.target.value)} placeholder="The name people know you by" /></label><label className="field">Professional email<input type="email" value={portfolio.email} onChange={(event) => updatePortfolio('email', event.target.value)} placeholder="you@example.com" /></label><label className="field">Contact number<input type="tel" inputMode="tel" autoComplete="tel" maxLength={24} value={portfolio.phone} onChange={(event) => updatePortfolio('phone', event.target.value)} placeholder="+63 912 345 6789" /></label><label className="field">Location <span className="field-note">City or region is plenty</span><input value={portfolio.address} onChange={(event) => updatePortfolio('address', event.target.value)} placeholder="Quezon City, Philippines" /></label></div><div className="photo-field"><span className="field-label">Profile photo</span><button type="button" className={`photo-drop ${portfolio.image ? 'photo-has-image' : ''}`} onClick={() => imageRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handlePhoto(event.dataTransfer.files?.[0]) }}>{portfolio.image ? <><img src={portfolio.image} alt="Security profile" /><span className="photo-change"><ImagePlus size={15} /> Change photo</span></> : <><div className="photo-icon"><ImagePlus size={20} /></div><strong>Add a professional photo</strong><span>or click to choose a file</span><small>JPG, PNG or WEBP · up to 5 MB</small></>}<input ref={imageRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { handlePhoto(event.target.files?.[0]); event.target.value = '' }} /></button></div><label className="field field-full">Professional summary <span className="field-note">Tell people what you focus on</span><textarea rows="5" maxLength="1200" value={portfolio.about} onChange={(event) => updatePortfolio('about', event.target.value)} placeholder="Share your interests in cybersecurity, the problems you care about, and the kind of impact you want to make." /><span className="character-count">{portfolio.about.length} / 1,200</span></label></div></section>
 
-        <section className="editor-section" id="education"><SectionHead number="02" icon={GraduationCap} title="The things you’ve learned" subtitle="School, a course, a long afternoon on YouTube — it all counts."/><RowEditor type="education" items={portfolio.education} onChange={(rows) => setRows('education', rows)} /><button className="add-entry" onClick={() => addRow('education')}><Plus size={16} /> Add education</button></section>
+        <section className="editor-section" id="education"><SectionHead number="02" icon={GraduationCap} title="Education & certifications" subtitle="Add cybersecurity degrees, industry certifications, and relevant training."/><RowEditor type="education" items={portfolio.education} onChange={(rows) => setRows('education', rows)} /><button className="add-entry" onClick={() => addRow('education')}><Plus size={16} /> Add education or certification</button></section>
 
-        <section className="editor-section" id="skills"><SectionHead number="03" icon={Code2} title="Your kind of magic" subtitle="Name the tools, skills, and small superpowers you bring to the table."/><form className="skill-entry" onSubmit={addSkill}><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="Type a skill and press Enter — e.g. Figma" aria-label="Add a skill" /><button type="submit" aria-label="Add skill"><Plus size={16} /></button></form><div className="skill-chips">{portfolio.skills.map((skill, index) => <span className="skill-chip" key={`${skill}-${index}`}>{skill}<button type="button" onClick={() => updatePortfolio('skills', portfolio.skills.filter((_, skillIndex) => skillIndex !== index))} aria-label={`Remove ${skill}`}><X size={13} /></button></span>)}</div></section>
+        <section className="editor-section" id="skills"><SectionHead number="03" icon={Code2} title="Skills & focus areas" subtitle="Highlight your defensive security strengths, tools, and certifications."/><form className="skill-entry" onSubmit={addSkill}><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="e.g. SIEM, incident response, cloud security" aria-label="Add a skill" /><button type="submit" aria-label="Add skill"><Plus size={16} /></button></form><div className="skill-chips">{portfolio.skills.map((skill, index) => <span className="skill-chip" key={`${skill}-${index}`}>{skill}<button type="button" onClick={() => updatePortfolio('skills', portfolio.skills.filter((_, skillIndex) => skillIndex !== index))} aria-label={`Remove ${skill}`}><X size={13} /></button></span>)}</div></section>
 
-        <section className="editor-section" id="projects"><SectionHead number="04" icon={Layers2} title="Things you’ve made" subtitle="Big launch or tiny experiment — show the work you’re proud of."/><RowEditor type="projects" items={portfolio.projects} onChange={(rows) => setRows('projects', rows)} /><button className="add-entry" onClick={() => addRow('projects')}><Plus size={16} /> Add a project</button></section>
+        <section className="editor-section" id="projects"><SectionHead number="04" icon={Layers2} title="Security projects & research" subtitle="Share responsible case studies, tools, community work, and lessons learned."/><div className="security-sharing-note"><ShieldCheck size={15} /><span>Share only work you’re authorized to disclose. Keep credentials, private data, and unpatched vulnerability details out of public write-ups.</span></div><RowEditor type="projects" items={portfolio.projects} onChange={(rows) => setRows('projects', rows)} /><button className="add-entry" onClick={() => addRow('projects')}><Plus size={16} /> Add a project</button></section>
 
-        <section className="editor-section" id="experience"><SectionHead number="05" icon={BriefcaseBusiness} title="Where you’ve been" subtitle="Work, volunteering, internships — the experience that shaped your craft."/><RowEditor type="experience" items={portfolio.experience} onChange={(rows) => setRows('experience', rows)} /><button className="add-entry" onClick={() => addRow('experience')}><Plus size={16} /> Add experience</button></section>
+        <section className="editor-section" id="experience"><SectionHead number="05" icon={BriefcaseBusiness} title="Security experience" subtitle="Highlight security roles, internships, incident response, and community work."/><RowEditor type="experience" items={portfolio.experience} onChange={(rows) => setRows('experience', rows)} /><button className="add-entry" onClick={() => addRow('experience')}><Plus size={16} /> Add security experience</button></section>
 
-        <section className="editor-section" id="links"><SectionHead number="06" icon={Link2} title="Find me around the internet" subtitle="Give people another place to say hello, see what you’re up to, or start a conversation."/><RowEditor type="links" items={portfolio.links} onChange={(rows) => setRows('links', rows)} /><button className="add-entry" onClick={() => addRow('links')}><Plus size={16} /> Add a link</button></section>
+        <section className="editor-section" id="links"><SectionHead number="06" icon={Link2} title="Research & professional links" subtitle="Link to responsible write-ups, code repositories, and professional profiles."/><RowEditor type="links" items={portfolio.links} onChange={(rows) => setRows('links', rows)} /><button className="add-entry" onClick={() => addRow('links')}><Plus size={16} /> Add a research or profile link</button></section>
 
-        <section className="editor-section design-section" id="design"><SectionHead number="07" icon={Palette} title="Find your look" subtitle="Three starting points. Your story, in its own light."/><label className="field slug-field">Your portfolio link <span className="field-note">A short, memorable address</span><div className="slug-input"><span>{window.location.origin}/p/</span><input value={store.slug || cleanSlug(portfolio.fullName)} onChange={(event) => store.setSlug(cleanSlug(event.target.value))} placeholder="your-name" aria-label="Portfolio URL slug" /></div></label><div className="template-grid">{templates.map((item) => <button className={`template-card ${store.template === item.id ? 'template-selected' : ''}`} key={item.id} onClick={() => store.setTemplate(item.id)}><TemplateMini template={item.id} /><div className="template-info"><div><h3>{item.name}</h3><span>{item.style} · {item.accent}</span></div><span className={`template-radio ${store.template === item.id ? 'radio-checked' : ''}`}>{store.template === item.id && <Check size={12} />}</span></div><p>{item.description}</p></button>)}</div></section>
+        <section className="editor-section design-section" id="design"><SectionHead number="07" icon={Palette} title="Choose your security profile design" subtitle="Pick the visual style that best represents your security work."/><label className="field slug-field">Public profile link <span className="field-note">Choose a short, professional URL</span><div className="slug-input"><span>{window.location.origin}/p/</span><input value={store.slug || cleanSlug(portfolio.fullName)} onChange={(event) => store.setSlug(cleanSlug(event.target.value))} placeholder="your-name" aria-label="Security profile URL slug" /></div></label><div className="template-grid">{templates.map((item) => <button className={`template-card ${store.template === item.id ? 'template-selected' : ''}`} key={item.id} onClick={() => store.setTemplate(item.id)}><TemplateMini template={item.id} /><div className="template-info"><div><h3>{item.name}</h3><span>{item.style} · {item.accent}</span></div><span className={`template-radio ${store.template === item.id ? 'radio-checked' : ''}`}>{store.template === item.id && <Check size={12} />}</span></div><p>{item.description}</p></button>)}</div></section>
 
-        <section className="editor-section manage-section" id="manage"><SectionHead number="08" icon={Globe2} title="Your portfolio, at a glance" subtitle="Preview, update, and manage the portfolio you’ve saved." />{store.hasSaved ? <div className="manage-card"><div className="manage-card-icon"><FileText size={19} /></div><div className="manage-card-info"><span className="eyebrow">{store.published ? 'LIVE PORTFOLIO' : 'SAVED DRAFT'} · {templates.find((item) => item.id === store.template)?.name}</span><h3>{portfolio.fullName || 'Your portfolio'}</h3><p>{store.published ? `${window.location.origin}/p/${store.slug}` : 'Your latest changes are saved. Preview or continue editing any time.'}</p></div><div className="manage-card-actions"><button className="button button-outline" onClick={() => setPreview(true)}><Eye size={15} /> View portfolio</button>{store.published && <a className="button button-outline" href={`/p/${encodeURIComponent(store.slug)}`} target="_blank" rel="noreferrer"><Globe2 size={15} /> Open live site</a>}<button className="button button-outline manage-edit" onClick={() => goToSection('about')}>Edit details <ArrowRight size={14} /></button><button className="button button-outline manage-delete" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 size={15} /> Delete</button></div>{confirmDelete && <div className="delete-confirm" role="alertdialog" aria-label="Confirm portfolio deletion"><span>Delete this portfolio and all its saved information? This can’t be undone.</span><button className="button button-outline" onClick={() => setConfirmDelete(false)} disabled={saving}>Keep it</button><button className="button button-delete" onClick={handleDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete portfolio'}</button></div>}</div> : <div className="manage-empty"><p>No portfolio saved yet. Add your details, then save a draft to manage it here.</p><button className="button button-outline" onClick={() => goToSection('about')}>Create your first portfolio <ArrowRight size={14} /></button></div>}</section>
+        <section className="editor-section manage-section" id="manage"><SectionHead number="08" icon={Globe2} title="Publish your security profile" subtitle="Preview your work, save a draft, or publish your professional profile." />{store.hasSaved ? <div className="manage-card"><div className="manage-card-icon"><ShieldCheck size={19} /></div><div className="manage-card-info"><span className="eyebrow">{store.published ? 'LIVE SECURITY PROFILE' : 'SAVED PROFILE DRAFT'} · {templates.find((item) => item.id === store.template)?.name}</span><h3>{portfolio.fullName || 'Your security profile'}</h3><p>{store.published ? `${window.location.origin}/p/${store.slug}` : 'Your saved security profile is ready to preview and update.'}</p></div><div className="manage-card-actions"><button className="button button-outline" onClick={() => setPreview(true)}><Eye size={15} /> Preview profile</button>{store.published && <a className="button button-outline" href={`/p/${encodeURIComponent(store.slug)}`} target="_blank" rel="noreferrer"><Globe2 size={15} /> Open live profile</a>}<button className="button button-outline manage-edit" onClick={() => goToSection('about')}>Edit profile <ArrowRight size={14} /></button><button className="button button-outline manage-delete" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 size={15} /> Delete</button></div>{confirmDelete && <div className="delete-confirm" role="alertdialog" aria-label="Confirm security profile deletion"><span>Delete your security profile and all its saved information? This can’t be undone.</span><button className="button button-outline" onClick={() => setConfirmDelete(false)} disabled={saving}>Keep profile</button><button className="button button-delete" onClick={handleDelete} disabled={saving}>{saving ? 'Deleting…' : 'Delete profile'}</button></div>}</div> : <div className="manage-empty"><p>No security profile saved yet. Add your details, then save a draft to preview it here.</p><button className="button button-outline" onClick={() => goToSection('about')}>Create your security profile <ArrowRight size={14} /></button></div>}</section>
 
-        <div className="finish-card"><div className="finish-icon"><Sparkles size={19} /></div><div><span className="eyebrow">THE FINISHING TOUCH</span><h2>Ready to make it yours?</h2><p>Save your details, generate a preview, then publish when it feels right.</p></div><div className="finish-actions"><button className="button button-dark" disabled={saving} onClick={handleGenerate}><Sparkles size={15} /> Generate portfolio <ArrowUpRight size={14} /></button></div></div>
-        <div className="builder-footer" id="setup"><span>MADE FOR YOUR NEXT CHAPTER <span className="footer-heart">✳</span></span><div><span>A STUDENT PROJECT, BUILT WITH CARE</span><a href="https://supabase.com" target="_blank" rel="noreferrer">DATABASE BY SUPABASE <ArrowUpRight size={12} /></a></div></div>
+        <div className="finish-card"><div className="finish-icon"><ShieldCheck size={19} /></div><div><span className="eyebrow">READY TO SHARE YOUR SIGNAL?</span><h2>Your security work deserves to be seen.</h2><p>Save your experience, preview your profile, and publish when you’re ready.</p></div><div className="finish-actions"><button className="button button-dark" disabled={saving} onClick={handleGenerate}><Eye size={15} /> Preview security profile <ArrowUpRight size={14} /></button></div></div>
+        <div className="builder-footer" id="setup"><span>DEFENSE STARTS WITH PEOPLE. <span className="footer-heart">✳</span></span><div><span>CYBERSECURITY PORTFOLIO STUDIO</span><a href="https://supabase.com" target="_blank" rel="noreferrer">DATABASE BY SUPABASE <ArrowUpRight size={12} /></a></div></div>
       </div>
     </main>
     {preview && <div className="preview-overlay" role="dialog" aria-modal="true" aria-label="Portfolio preview"><PortfolioPage portfolio={portfolio} template={store.template} onClose={() => setPreview(false)} /></div>}
-  </div>
+  </div><SupportAssistant /></>
 }
 
 function SectionHead({ number, icon: Icon, title, subtitle }) {
@@ -747,11 +773,16 @@ function SectionHead({ number, icon: Icon, title, subtitle }) {
     'Find your look': 'Template Selection',
     'Your portfolio, at a glance': 'Manage Portfolio',
   }
-  return <div className="section-head"><span className="section-icon"><Icon size={18} strokeWidth={1.7} /></span><div className="section-head-copy"><div className="section-kicker">CHAPTER {number}</div><h2>{requiredTitles[title] || title}</h2><p>{subtitle}</p></div></div>
+  return <div className="section-head"><span className="section-icon"><Icon size={18} strokeWidth={1.7} /></span><div className="section-head-copy"><div className="section-kicker">SECURITY PROFILE / {number}</div><h2>{requiredTitles[title] || title}</h2><p>{subtitle}</p></div></div>
 }
 
 function TemplateMini({ template }) {
-  return <div className={`template-mini mini-${template}`}><div className="mini-window"><span /><span /><span /><div className="mini-split"><div className="mini-text"><i /><i /><i /><b /></div><div className="mini-image" /></div><div className="mini-bottom"><i /><i /><i /></div></div>{template === 'modern' && <span className="mini-badge">01—04</span>}{template === 'creative' && <span className="mini-sticker">hello!</span>}</div>
+  return <div className={`template-mini cyber-preview cyber-preview-${template}`} aria-hidden="true">
+    <div className="cyber-preview-top"><span><ShieldCheck size={13} /> NEXUS / SECURITY</span><span>PROFILE_0{templates.findIndex((item) => item.id === template) + 1}</span></div>
+    {template === 'simple' && <div className="cyber-preview-simple"><span>SECURITY ANALYST · PROFILE</span><strong>Defend what<br />matters.</strong><div><i /><i /><i /><i /></div><small>RESEARCH / RESPONSE / RESILIENCE</small></div>}
+    {template === 'modern' && <div className="cyber-preview-dashboard"><div className="cyber-dashboard-sidebar"><i /><i /><i /><i /></div><div className="cyber-dashboard-main"><span>THREAT INTELLIGENCE</span><div className="cyber-metrics"><i /><i /><i /></div><div className="cyber-chart"><Activity size={60} strokeWidth={1.25} /></div><div className="cyber-dashboard-lines"><i /><i /><i /></div></div></div>}
+    {template === 'creative' && <div className="cyber-preview-creative"><span className="creative-orbit creative-orbit-one" /><span className="creative-orbit creative-orbit-two" /><ShieldCheck size={37} strokeWidth={1.2} /><strong>THINK<br />DIFFERENT.</strong><small>01 / RESEARCHER SIGNAL</small></div>}
+  </div>
 }
 
 export default App
