@@ -27,7 +27,13 @@ export default function SupportAssistant() {
     const text = message.trim()
     if (!text || busy) return
 
-    const nextMessages = retry ? messages : [...messages, { role: 'user', content: text }]
+    let lastUserIndex = -1
+    messages.forEach((item, index) => {
+      if (item.role === 'user') lastUserIndex = index
+    })
+    const nextMessages = retry
+      ? messages.slice(0, lastUserIndex + 1)
+      : [...messages, { role: 'user', content: text }]
     setMessages(nextMessages)
     setDraft('')
     setError('')

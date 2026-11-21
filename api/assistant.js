@@ -11,6 +11,34 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body))
 }
 
+function getBuiltInReply(message) {
+  const text = message.toLowerCase()
+
+  if (text.includes('publish') || text.includes('public')) {
+    return 'Open the builder, complete your profile sections, then choose Publish Profile. Publishing requires a signed-in account and a configured Supabase connection. After publishing, use the shared public portfolio link to view the portfolio.'
+  }
+  if (text.includes('draft') || text.includes('save')) {
+    return 'Use Save Changes in the builder to save your draft. The save indicator shows whether your latest changes are saved. Open Manage Portfolio later to edit or publish an existing portfolio.'
+  }
+  if (text.includes('template') || text.includes('design') || text.includes('theme')) {
+    return 'You can choose Simple, Modern, or Creative in the design section of the builder. Preview the portfolio before publishing, then switch templates and save again if you want to change the design.'
+  }
+  if (text.includes('preview')) {
+    return 'Open Preview from the builder to see how your portfolio looks before publishing. Changes should be saved first so the preview reflects your latest edits.'
+  }
+  if (text.includes('profile') || text.includes('add') || text.includes('skill') || text.includes('project') || text.includes('experience') || text.includes('education') || text.includes('cert')) {
+    return 'Use the builder sections for profile details, education, certifications, skills, projects, experience, and links. Fill in the fields, save your draft, and use Preview to check the result.'
+  }
+  if (text.includes('login') || text.includes('sign in') || text.includes('account') || text.includes('google')) {
+    return 'Open Login and sign in with email and password or the Google option. Account access is required for saving drafts, publishing portfolios, and managing published profiles.'
+  }
+  if (text.includes('manage') || text.includes('delete') || text.includes('edit')) {
+    return 'Open Manage Portfolio from the workspace to edit saved drafts or published profiles. You can continue editing a draft and use Publish when it is ready.'
+  }
+
+  return 'I can help with building a portfolio, choosing Simple, Modern, or Creative, saving drafts, previewing, publishing, account access, and managing your profile. What would you like to do?'
+}
+
 async function getRequestBody(request) {
   if (request.body !== undefined) return request.body
 
@@ -63,8 +91,9 @@ export default async function handler(request, response) {
     return sendJson(response, 400, { error: 'Your message could not be processed. Please try again.' })
   }
 
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content
   if (!process.env.OPENAI_API_KEY) {
-    return sendJson(response, 503, { error: 'AI support is not configured yet. Please contact the site administrator.' })
+    return sendJson(response, 200, { reply: getBuiltInReply(latestUserMessage || '') })
   }
 
   const controller = new AbortController()
@@ -87,7 +116,7 @@ export default async function handler(request, response) {
 
     if (!result.ok) {
       console.error(`OpenAI support request failed with status ${result.status}`)
-      return sendJson(response, 502, { error: 'AI support is temporarily unavailable. Please try again in a moment.' })
+      return sendJson(response, 200, { reply: getBuiltInReply(latestUserMessage || '') })
     }
 
     const data = await result.json()
@@ -100,7 +129,7 @@ export default async function handler(request, response) {
     return sendJson(response, 200, { reply: reply.trim() })
   } catch (error) {
     console.error('OpenAI support request could not be completed', error.name === 'AbortError' ? 'timed out' : error.message)
-    return sendJson(response, 502, { error: 'Could not reach AI support. Please try again in a moment.' })
+    return sendJson(response, 200, { reply: getBuiltInReply(latestUserMessage || '') })
   } finally {
     clearTimeout(timeout)
   }
